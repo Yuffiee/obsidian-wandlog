@@ -57,6 +57,8 @@
 .tm-heatmap-cells {
   display: grid;
   justify-content: end;
+  grid-template-rows: repeat(7, 14px);
+  gap: 6px;
 }
 
 .tm-heatmap-cell {
@@ -269,10 +271,10 @@
 
 /* ── Dice button ── */
 
-.tm-dice-btn {
-  background: transparent !important;
+.tm-section-header .tm-dice-btn {
+  background: transparent;
   border: none;
-  box-shadow: none !important;
+  box-shadow: none;
   width: 28px;
   height: 28px;
   padding: 0;
@@ -286,12 +288,11 @@
   align-items: center;
   justify-content: center;
 }
-.tm-dice-btn:hover {
-  background: var(--background-modifier-hover) !important;
-  box-shadow: none !important;
-  color: var(--text-normal);
+.tm-section-header .tm-dice-btn:hover {
+  background: var(--background-modifier-hover);
+  box-shadow: none;
 }
-.tm-dice-btn:active {
+.tm-section-header .tm-dice-btn:active {
   transform: scale(0.85);
 }
 

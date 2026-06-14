@@ -95,7 +95,7 @@ var WandlogSettingTab = class extends import_obsidian2.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: t("\u{1F4CA} \u70ED\u529B\u56FE", "\u{1F4CA} Heatmap") });
+    new import_obsidian2.Setting(containerEl).setName(t("\u{1F4CA} \u70ED\u529B\u56FE", "\u{1F4CA} Heatmap")).setHeading();
     addFolderListSetting(
       containerEl,
       t("\u8FFD\u8E2A\u6587\u4EF6\u5939", "Track Folders"),
@@ -123,7 +123,7 @@ var WandlogSettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    containerEl.createEl("h2", { text: t("\u{1F3B2} \u968F\u673A\u6F2B\u6B65", "\u{1F3B2} Random") });
+    new import_obsidian2.Setting(containerEl).setName(t("\u{1F3B2} \u968F\u673A\u6F2B\u6B65", "\u{1F3B2} Random")).setHeading();
     addFolderListSetting(
       containerEl,
       t("\u6392\u9664\u6587\u4EF6\u5939", "Exclude Folders"),
@@ -139,7 +139,7 @@ var WandlogSettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       }
     );
-    containerEl.createEl("h2", { text: t("\u2611\uFE0F \u5F85\u529E\u4E8B\u9879", "\u2611\uFE0F Todo") });
+    new import_obsidian2.Setting(containerEl).setName(t("\u2611\uFE0F \u5F85\u529E\u4E8B\u9879", "\u2611\uFE0F Todo")).setHeading();
     addFolderListSetting(
       containerEl,
       t("\u5F85\u529E\u6587\u4EF6\u5939", "Todo Folders"),
@@ -155,7 +155,7 @@ var WandlogSettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       }
     );
-    containerEl.createEl("h2", { text: t("\u{1F517} \u4EA4\u4E92", "\u{1F517} Interaction") });
+    new import_obsidian2.Setting(containerEl).setName(t("\u{1F517} \u4EA4\u4E92", "\u{1F517} Interaction")).setHeading();
     new import_obsidian2.Setting(containerEl).setName(t("\u6253\u5F00\u65B9\u5F0F", "Open In")).setDesc(
       t(
         "\u70B9\u51FB\u65E5\u671F\u65B9\u5757\u3001\u5361\u7247\u6216\u5F85\u529E\u4E8B\u9879\u65F6\u5728\u65B0\u6807\u7B7E\u9875\u8FD8\u662F\u5F53\u524D\u6807\u7B7E\u9875\u6253\u5F00",
@@ -227,7 +227,7 @@ function extractLeafItems(text, filePath) {
   return result;
 }
 function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 function shuffle(arr) {
   const a = [...arr];
@@ -315,7 +315,7 @@ var Indexer = class {
   onFileChanged(file) {
     if (file.extension !== "md")
       return;
-    this.indexFile(file);
+    void this.indexFile(file);
   }
   onFileDeleted(filePath) {
     delete this.cache.leafItems[filePath];
@@ -327,11 +327,11 @@ var Indexer = class {
   onFileCreated(file) {
     if (file.extension !== "md")
       return;
-    this.indexFile(file);
+    void this.indexFile(file);
   }
   onFileRenamed(file, oldPath) {
     this.onFileDeleted(oldPath);
-    this.indexFile(file);
+    void this.indexFile(file);
   }
   updateSettings(settings) {
     const oldExclude = this.settings.excludeFolders;
@@ -437,7 +437,7 @@ var Heatmap = class {
   }
   scheduleRender() {
     if (this.renderTimer)
-      clearTimeout(this.renderTimer);
+      window.clearTimeout(this.renderTimer);
     this.renderTimer = window.setTimeout(() => this.doRender(), 100);
   }
   doRender() {
@@ -474,9 +474,7 @@ var Heatmap = class {
     if (weeks.length === 0)
       return;
     const cells = this.container.createDiv("tm-heatmap-cells");
-    cells.style.gridTemplateRows = "repeat(7, 14px)";
     cells.style.gridTemplateColumns = `repeat(${weeks.length}, 1fr)`;
-    cells.style.gap = "6px";
     const target = this.dailyWordTarget;
     const todayStr = dateString(today);
     const todayGridRow = (today.getDay() + 6) % 7;
@@ -525,14 +523,14 @@ var Heatmap = class {
   }
   showTooltip(el, date, count) {
     this.hideTooltip();
-    const tooltip = document.createElement("div");
+    const tooltip = activeDocument.createElement("div");
     tooltip.addClass("tm-heatmap-tooltip");
     const pct = this.dailyWordTarget > 0 ? Math.round(count / this.dailyWordTarget * 100) : 0;
     tooltip.createDiv({
       text: `${count}${t(" \u5B57", " chars")}  \xB7  ${pct}%`
     });
     tooltip.createDiv({ cls: "tm-heatmap-tooltip-date", text: date });
-    document.body.appendChild(tooltip);
+    activeDocument.body.appendChild(tooltip);
     const rect = el.getBoundingClientRect();
     const half = tooltip.offsetWidth / 2;
     const x = Math.max(
@@ -614,8 +612,8 @@ var CardWalk = class {
       e.preventDefault();
       e.stopPropagation();
       new import_obsidian3.Menu().addItem(
-        (menuItem) => menuItem.setTitle(t("\u590D\u5236\u5230\u526A\u8D34\u677F", "Copy to clipboard")).setIcon("copy").onClick(() => {
-          navigator.clipboard.writeText(card.cleanText);
+        (menuItem) => menuItem.setTitle(t("\u590D\u5236\u5230\u526A\u8D34\u677F", "Copy to clipboard")).setIcon("copy").onClick(async () => {
+          await navigator.clipboard.writeText(card.cleanText);
           new import_obsidian3.Notice(t("\u5DF2\u590D\u5236", "Copied"));
         })
       ).addItem(
@@ -811,8 +809,8 @@ var WandlogView = class extends import_obsidian4.ItemView {
           e.preventDefault();
           e.stopPropagation();
           new import_obsidian4.Menu().addItem(
-            (item) => item.setTitle(t("\u590D\u5236\u5230\u526A\u8D34\u677F", "Copy to clipboard")).setIcon("copy").onClick(() => {
-              navigator.clipboard.writeText(task.cleanText);
+            (item) => item.setTitle(t("\u590D\u5236\u5230\u526A\u8D34\u677F", "Copy to clipboard")).setIcon("copy").onClick(async () => {
+              await navigator.clipboard.writeText(task.cleanText);
               new import_obsidian4.Notice(t("\u5DF2\u590D\u5236", "Copied"));
             })
           ).addItem(
@@ -951,7 +949,7 @@ var WandlogView = class extends import_obsidian4.ItemView {
       if (typeof editor.getCursor === "function") {
         goToLine();
       } else {
-        requestAnimationFrame(goToLine);
+        window.requestAnimationFrame(goToLine);
       }
     } catch (e) {
       console.warn("[Wandlog] Failed to open source file:", e);
@@ -966,20 +964,30 @@ var WandlogPlugin = class extends import_obsidian5.Plugin {
     this.view = null;
     this.refreshTimeout = null;
   }
+  /** Lazily resolve the view instance from workspace leaves. */
+  get activeView() {
+    if (this.view)
+      return this.view;
+    const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE);
+    if (leaves.length > 0) {
+      this.view = leaves[0].view;
+      return this.view;
+    }
+    return null;
+  }
   async onload() {
     await this.loadSettings();
     this.indexer = new Indexer(this.app, this.settings);
     const saved = await this.loadData();
     await this.indexer.initialize(saved == null ? void 0 : saved.indexerCache);
     this.registerView(VIEW_TYPE, (leaf) => {
-      this.view = new WandlogView(leaf, this);
-      return this.view;
+      return new WandlogView(leaf, this);
     });
-    this.addRibbonIcon("footprints", t("Wandlog", "Wandlog"), () => {
+    this.addRibbonIcon("footprints", t("Wandlog", "Wandlog"), async () => {
       this.activateView();
     });
     this.addCommand({
-      id: "open-wandlog",
+      id: "open",
       name: t("\u6253\u5F00 Wandlog", "Open Wandlog"),
       callback: () => this.activateView()
     });
@@ -988,7 +996,7 @@ var WandlogPlugin = class extends import_obsidian5.Plugin {
       name: t("\u5237\u65B0\u968F\u673A\u5361\u7247", "Refresh Random Cards"),
       callback: () => {
         var _a;
-        return (_a = this.view) == null ? void 0 : _a.refreshCards();
+        return (_a = this.activeView) == null ? void 0 : _a.refreshCards();
       }
     });
     this.addSettingTab(new WandlogSettingTab(this.app, this));
@@ -1005,8 +1013,8 @@ var WandlogPlugin = class extends import_obsidian5.Plugin {
         var _a, _b;
         if (file instanceof import_obsidian5.TFile && file.extension === "md") {
           this.indexer.onFileCreated(file);
-          (_a = this.view) == null ? void 0 : _a.invalidateDatesCache();
-          (_b = this.view) == null ? void 0 : _b.invalidateDailyNoteCache();
+          (_a = this.activeView) == null ? void 0 : _a.invalidateDatesCache();
+          (_b = this.activeView) == null ? void 0 : _b.invalidateDailyNoteCache();
           this.debounceRefresh();
         }
       })
@@ -1016,8 +1024,8 @@ var WandlogPlugin = class extends import_obsidian5.Plugin {
         var _a, _b;
         if (file instanceof import_obsidian5.TFile && file.extension === "md") {
           this.indexer.onFileDeleted(file.path);
-          (_a = this.view) == null ? void 0 : _a.invalidateDatesCache();
-          (_b = this.view) == null ? void 0 : _b.invalidateDailyNoteCache();
+          (_a = this.activeView) == null ? void 0 : _a.invalidateDatesCache();
+          (_b = this.activeView) == null ? void 0 : _b.invalidateDailyNoteCache();
           this.debounceRefresh();
         }
       })
@@ -1030,8 +1038,8 @@ var WandlogPlugin = class extends import_obsidian5.Plugin {
         }
       })
     );
-    this.registerInterval(window.setInterval(() => this.persistCache(), 3e4));
-    this.app.workspace.onLayoutReady(() => {
+    this.registerInterval(window.setInterval(() => void this.persistCache(), 3e4));
+    this.app.workspace.onLayoutReady(async () => {
       this.activateView();
     });
   }
@@ -1050,7 +1058,7 @@ var WandlogPlugin = class extends import_obsidian5.Plugin {
       indexerCache: this.indexer.getCache()
     });
     await this.indexer.updateSettings(this.settings);
-    (_a = this.view) == null ? void 0 : _a.onSettingsChanged();
+    (_a = this.activeView) == null ? void 0 : _a.onSettingsChanged();
   }
   async persistCache() {
     await this.saveData({
@@ -1073,13 +1081,13 @@ var WandlogPlugin = class extends import_obsidian5.Plugin {
   }
   debounceRefresh() {
     if (this.refreshTimeout !== null) {
-      clearTimeout(this.refreshTimeout);
+      window.clearTimeout(this.refreshTimeout);
     }
-    this.refreshTimeout = window.setTimeout(() => {
+    this.refreshTimeout = window.setTimeout(async () => {
       var _a, _b, _c;
-      (_a = this.view) == null ? void 0 : _a.refreshHeatmap();
-      (_b = this.view) == null ? void 0 : _b.refreshCards();
-      (_c = this.view) == null ? void 0 : _c.refreshTodos();
+      void ((_a = this.activeView) == null ? void 0 : _a.refreshHeatmap());
+      void ((_b = this.activeView) == null ? void 0 : _b.refreshCards());
+      void ((_c = this.activeView) == null ? void 0 : _c.refreshTodos());
     }, 500);
   }
 };

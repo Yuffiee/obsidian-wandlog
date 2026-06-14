@@ -2,6 +2,12 @@ import { App, Menu, Notice, Modal } from "obsidian";
 import { t } from "./i18n";
 import { LeafItem, shortPath, shuffle } from "./utils";
 
+/** Minimal interface for Obsidian's internal Setting API. */
+interface AppSetting {
+  open(): void;
+  openTabById(id: string): void;
+}
+
 /**
  * Picks and renders a single random card.
  */
@@ -66,8 +72,9 @@ export class CardWalk {
       const settingsBtn = emptyEl.createEl("button", { cls: "tm-settings-link" });
       settingsBtn.setText(t("打开设置", "Open Settings"));
       settingsBtn.addEventListener("click", () => {
-        (this.app as any).setting.open();
-        (this.app as any).setting.openTabById("wandlog");
+        const setting = (this.app as { setting: AppSetting }).setting;
+        setting.open();
+        setting.openTabById("wandlog");
       });
       return;
     }
@@ -90,8 +97,8 @@ export class CardWalk {
           menuItem
             .setTitle(t("复制到剪贴板", "Copy to clipboard"))
             .setIcon("copy")
-            .onClick(() => {
-              navigator.clipboard.writeText(card.cleanText);
+            .onClick(async () => {
+              await navigator.clipboard.writeText(card.cleanText);
               new Notice(t("已复制", "Copied"));
             }),
         )

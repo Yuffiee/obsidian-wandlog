@@ -55,7 +55,7 @@ export class Heatmap {
   }
 
   private scheduleRender(): void {
-    if (this.renderTimer) clearTimeout(this.renderTimer);
+    if (this.renderTimer) window.clearTimeout(this.renderTimer);
     this.renderTimer = window.setTimeout(() => this.doRender(), 100);
   }
 
@@ -99,9 +99,7 @@ export class Heatmap {
     if (weeks.length === 0) return;
 
     const cells = this.container.createDiv("tm-heatmap-cells");
-    cells.style.gridTemplateRows = "repeat(7, 14px)";
-    cells.style.gridTemplateColumns = `repeat(${weeks.length}, 1fr)`;
-    cells.style.gap = "6px";
+    cells.style.setProperty("grid-template-columns", `repeat(${weeks.length}, 1fr)`);
 
     const target = this.dailyWordTarget;
     const todayStr = dateString(today);
@@ -151,7 +149,7 @@ export class Heatmap {
   private showTooltip(el: HTMLElement, date: string, count: number): void {
     this.hideTooltip();
 
-    const tooltip = document.createElement("div");
+    const tooltip = activeDocument.createElement("div");
     tooltip.addClass("tm-heatmap-tooltip");
 
     const pct = this.dailyWordTarget > 0 ? Math.round((count / this.dailyWordTarget) * 100) : 0;
@@ -159,7 +157,7 @@ export class Heatmap {
       text: `${count}${t(" 字", " chars")}  ·  ${pct}%`,
     });
     tooltip.createDiv({ cls: "tm-heatmap-tooltip-date", text: date });
-    document.body.appendChild(tooltip);
+    activeDocument.body.appendChild(tooltip);
 
     const rect = el.getBoundingClientRect();
     const half = tooltip.offsetWidth / 2;
@@ -167,8 +165,8 @@ export class Heatmap {
       half + 5,
       Math.min(rect.left + rect.width / 2, window.innerWidth - half - 5),
     );
-    tooltip.style.left = `${x}px`;
-    tooltip.style.top = `${rect.top - 38}px`;
+    tooltip.style.setProperty("left", `${x}px`);
+    tooltip.style.setProperty("top", `${rect.top - 38}px`);
 
     this.tooltipEl = tooltip;
   }

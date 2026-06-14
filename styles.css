@@ -336,8 +336,8 @@
   animation: tm-spin 0.8s linear infinite;
 }
 
-.tm-loading-done {
-  display: none !important;
+.tm-view-container > .tm-loading-done {
+  display: none;
 }
 
 @keyframes tm-spin {

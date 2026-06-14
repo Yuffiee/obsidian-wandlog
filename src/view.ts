@@ -7,6 +7,13 @@ import { CardWalk } from "./card-walk";
 import type WandlogPlugin from "./main";
 import type { TaskItem } from "./indexer";
 
+/** Minimal interface for Obsidian's CodeMirror editor. */
+interface EditorLike {
+  setCursor(pos: { line: number; ch: number }): void;
+  scrollIntoView(range: { from: { line: number; ch: number }; to: { line: number; ch: number } }, center: boolean): void;
+  getCursor(): { line: number; ch: number };
+}
+
 export const VIEW_TYPE = "wandlog-view";
 
 export class WandlogView extends ItemView {
@@ -170,8 +177,8 @@ export class WandlogView extends ItemView {
               item
                 .setTitle(t("复制到剪贴板", "Copy to clipboard"))
                 .setIcon("copy")
-                .onClick(() => {
-                  navigator.clipboard.writeText(task.cleanText);
+                .onClick(async () => {
+                  await navigator.clipboard.writeText(task.cleanText);
                   new Notice(t("已复制", "Copied"));
                 }),
             )
@@ -313,10 +320,10 @@ export class WandlogView extends ItemView {
     await leaf.openFile(file);
 
     const activeView = leaf.view;
-    if (!(activeView as any)?.editor) return;
+    const editor: EditorLike | undefined = (activeView as { editor?: EditorLike })?.editor;
+    if (!editor) return;
 
     try {
-      const editor = (activeView as any).editor;
       // Wait for editor to be ready, then set cursor and scroll
       const goToLine = () => {
         try {
@@ -333,7 +340,7 @@ export class WandlogView extends ItemView {
       if (typeof editor.getCursor === "function") {
         goToLine();
       } else {
-        requestAnimationFrame(goToLine);
+        window.requestAnimationFrame(goToLine);
       }
     } catch (e) {
       console.warn("[Wandlog] Failed to open source file:", e);

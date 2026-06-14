@@ -45,7 +45,7 @@ function addFolderListSetting(
             .split(",")
             .map((s) => s.trim())
             .filter((s) => s.length > 0);
-          onChange(folders);
+          await onChange(folders);
         });
 
       new FolderSuggest(app, text.inputEl, (selected) => {
@@ -74,7 +74,7 @@ export class WandlogSettingTab extends PluginSettingTab {
     containerEl.empty();
 
     // ── Heatmap section ──
-    containerEl.createEl("h2", { text: t("📊 热力图", "📊 Heatmap") });
+    new Setting(containerEl).setName(t("📊 热力图", "📊 Heatmap")).setHeading();
 
     addFolderListSetting(
       containerEl,
@@ -125,7 +125,7 @@ export class WandlogSettingTab extends PluginSettingTab {
       );
 
     // ── Random Walk section ──
-    containerEl.createEl("h2", { text: t("🎲 随机漫步", "🎲 Random") });
+    new Setting(containerEl).setName(t("🎲 随机漫步", "🎲 Random")).setHeading();
 
     addFolderListSetting(
       containerEl,
@@ -144,7 +144,7 @@ export class WandlogSettingTab extends PluginSettingTab {
     );
 
     // ── Todo section ──
-    containerEl.createEl("h2", { text: t("☑️ 待办事项", "☑️ Todo") });
+    new Setting(containerEl).setName(t("☑️ 待办事项", "☑️ Todo")).setHeading();
 
     addFolderListSetting(
       containerEl,
@@ -163,7 +163,7 @@ export class WandlogSettingTab extends PluginSettingTab {
     );
 
     // ── Interaction section ──
-    containerEl.createEl("h2", { text: t("🔗 交互", "🔗 Interaction") });
+    new Setting(containerEl).setName(t("🔗 交互", "🔗 Interaction")).setHeading();
 
     new Setting(containerEl)
       .setName(t("打开方式", "Open In"))

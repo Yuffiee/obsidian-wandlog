@@ -27,6 +27,6 @@ export class FolderSuggest extends AbstractInputSuggest<string> {
 
   selectSuggestion(value: string): void {
     this.onSelectCb(value || "");
-    this.inputEl.blur();
+    (this.inputEl as HTMLInputElement).blur();
   }
 }

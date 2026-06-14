@@ -90,7 +90,7 @@ export class Indexer {
 
   onFileChanged(file: TFile): void {
     if (file.extension !== "md") return;
-    this.indexFile(file);
+    void this.indexFile(file);
   }
 
   onFileDeleted(filePath: string): void {
@@ -102,12 +102,12 @@ export class Indexer {
 
   onFileCreated(file: TFile): void {
     if (file.extension !== "md") return;
-    this.indexFile(file);
+    void this.indexFile(file);
   }
 
   onFileRenamed(file: TFile, oldPath: string): void {
     this.onFileDeleted(oldPath);
-    this.indexFile(file);
+    void this.indexFile(file);
   }
 
   updateSettings(settings: PluginSettings): void {
@@ -148,7 +148,7 @@ export class Indexer {
       try {
         content = await this.app.vault.cachedRead(file);
       } catch (e) {
-        console.warn("[Wandlog] Failed to read file for tasks:", (e as any)?.message || e);
+        console.warn("[Wandlog] Failed to read file for tasks:", (e as Error)?.message || e);
         continue;
       }
 

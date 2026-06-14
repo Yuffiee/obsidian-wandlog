@@ -84,7 +84,7 @@ export function extractLeafItems(text: string, filePath: string): LeafItem[] {
 
 /** Sleep for `ms` milliseconds. */
 export function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 /** Fisher-Yates shuffle (returns a new array). */

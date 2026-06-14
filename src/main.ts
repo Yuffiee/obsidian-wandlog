@@ -4,11 +4,27 @@ import { Indexer, IndexerCache } from "./indexer";
 import { WandlogView, VIEW_TYPE } from "./view";
 import { t } from "./i18n";
 
+interface SavedData {
+  indexerCache?: IndexerCache;
+  settings?: Record<string, unknown>;
+}
+
 export default class WandlogPlugin extends Plugin {
   settings!: PluginSettings;
   indexer!: Indexer;
   view: WandlogView | null = null;
   private refreshTimeout: number | null = null;
+
+  /** Lazily resolve the view instance from workspace leaves. */
+  private get activeView(): WandlogView | null {
+    if (this.view) return this.view;
+    const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE);
+    if (leaves.length > 0) {
+      this.view = leaves[0].view as WandlogView;
+      return this.view;
+    }
+    return null;
+  }
 
   async onload(): Promise<void> {
     await this.loadSettings();
@@ -16,22 +32,21 @@ export default class WandlogPlugin extends Plugin {
     this.indexer = new Indexer(this.app, this.settings);
 
     const saved = await this.loadData();
-    await this.indexer.initialize((saved as any)?.indexerCache);
+    await this.indexer.initialize((saved as SavedData)?.indexerCache);
 
     // Register the side-bar view
     this.registerView(VIEW_TYPE, (leaf) => {
-      this.view = new WandlogView(leaf, this);
-      return this.view;
+      return new WandlogView(leaf, this);
     });
 
     // Ribbon icon
     this.addRibbonIcon("footprints", t("Wandlog", "Wandlog"), () => {
-      this.activateView();
+      void this.activateView();
     });
 
     // Commands
     this.addCommand({
-      id: "open-wandlog",
+      id: "open",
       name: t("打开 Wandlog", "Open Wandlog"),
       callback: () => this.activateView(),
     });
@@ -39,7 +54,7 @@ export default class WandlogPlugin extends Plugin {
     this.addCommand({
       id: "refresh-cards",
       name: t("刷新随机卡片", "Refresh Random Cards"),
-      callback: () => this.view?.refreshCards(),
+      callback: () => this.activeView?.refreshCards(),
     });
 
     // Settings tab
@@ -59,8 +74,8 @@ export default class WandlogPlugin extends Plugin {
       this.app.vault.on("create", (file) => {
         if (file instanceof TFile && file.extension === "md") {
           this.indexer.onFileCreated(file);
-          this.view?.invalidateDatesCache();
-          this.view?.invalidateDailyNoteCache();
+          this.activeView?.invalidateDatesCache();
+          this.activeView?.invalidateDailyNoteCache();
           this.debounceRefresh();
         }
       }),
@@ -70,8 +85,8 @@ export default class WandlogPlugin extends Plugin {
       this.app.vault.on("delete", (file) => {
         if (file instanceof TFile && file.extension === "md") {
           this.indexer.onFileDeleted(file.path);
-          this.view?.invalidateDatesCache();
-          this.view?.invalidateDailyNoteCache();
+          this.activeView?.invalidateDatesCache();
+          this.activeView?.invalidateDailyNoteCache();
           this.debounceRefresh();
         }
       }),
@@ -87,21 +102,21 @@ export default class WandlogPlugin extends Plugin {
     );
 
     // Auto-save cache every 30s
-    this.registerInterval(window.setInterval(() => this.persistCache(), 30_000));
+    this.registerInterval(window.setInterval(() => void this.persistCache(), 30_000));
 
     // Activate view once layout is ready
     this.app.workspace.onLayoutReady(() => {
-      this.activateView();
+      void this.activateView();
     });
   }
 
-  async onunload(): Promise<void> {
-    await this.persistCache();
+  onunload(): void {
+    void this.persistCache();
   }
 
   async loadSettings(): Promise<void> {
     const saved = await this.loadData();
-    const raw = (saved as any)?.settings || {};
+    const raw = (saved as SavedData)?.settings || {};
 
     this.settings = Object.assign({}, DEFAULT_SETTINGS, raw);
   }
@@ -112,7 +127,7 @@ export default class WandlogPlugin extends Plugin {
       indexerCache: this.indexer.getCache(),
     });
     await this.indexer.updateSettings(this.settings);
-    this.view?.onSettingsChanged();
+    this.activeView?.onSettingsChanged();
   }
 
   async persistCache(): Promise<void> {
@@ -140,12 +155,12 @@ export default class WandlogPlugin extends Plugin {
 
   private debounceRefresh(): void {
     if (this.refreshTimeout !== null) {
-      clearTimeout(this.refreshTimeout);
+      window.clearTimeout(this.refreshTimeout);
     }
     this.refreshTimeout = window.setTimeout(() => {
-      this.view?.refreshHeatmap();
-      this.view?.refreshCards();
-      this.view?.refreshTodos();
+      void this.activeView?.refreshHeatmap();
+      void this.activeView?.refreshCards();
+      void this.activeView?.refreshTodos();
     }, 500);
   }
 }

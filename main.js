@@ -74,7 +74,7 @@ function addFolderListSetting(container, name, desc, currentValue, placeholder, 
   new import_obsidian2.Setting(container).setName(name).setDesc(desc).addText((text) => {
     text.setPlaceholder(placeholder).setValue(currentValue.join(", ")).onChange(async (val) => {
       const folders = val.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
-      onChange(folders);
+      await onChange(folders);
     });
     new FolderSuggest(app, text.inputEl, (selected) => {
       const raw = text.getValue().trim();
@@ -474,7 +474,7 @@ var Heatmap = class {
     if (weeks.length === 0)
       return;
     const cells = this.container.createDiv("tm-heatmap-cells");
-    cells.style.gridTemplateColumns = `repeat(${weeks.length}, 1fr)`;
+    cells.style.setProperty("grid-template-columns", `repeat(${weeks.length}, 1fr)`);
     const target = this.dailyWordTarget;
     const todayStr = dateString(today);
     const todayGridRow = (today.getDay() + 6) % 7;
@@ -537,8 +537,8 @@ var Heatmap = class {
       half + 5,
       Math.min(rect.left + rect.width / 2, window.innerWidth - half - 5)
     );
-    tooltip.style.left = `${x}px`;
-    tooltip.style.top = `${rect.top - 38}px`;
+    tooltip.style.setProperty("left", `${x}px`);
+    tooltip.style.setProperty("top", `${rect.top - 38}px`);
     this.tooltipEl = tooltip;
   }
   hideTooltip() {
@@ -596,8 +596,9 @@ var CardWalk = class {
       const settingsBtn = emptyEl.createEl("button", { cls: "tm-settings-link" });
       settingsBtn.setText(t("\u6253\u5F00\u8BBE\u7F6E", "Open Settings"));
       settingsBtn.addEventListener("click", () => {
-        this.app.setting.open();
-        this.app.setting.openTabById("wandlog");
+        const setting = this.app.setting;
+        setting.open();
+        setting.openTabById("wandlog");
       });
       return;
     }
@@ -931,10 +932,10 @@ var WandlogView = class extends import_obsidian4.ItemView {
     );
     await leaf.openFile(file);
     const activeView = leaf.view;
-    if (!(activeView == null ? void 0 : activeView.editor))
+    const editor = activeView == null ? void 0 : activeView.editor;
+    if (!editor)
       return;
     try {
-      const editor = activeView.editor;
       const goToLine = () => {
         try {
           editor.setCursor({ line: item.lineNumber, ch: 0 });
@@ -1043,8 +1044,8 @@ var WandlogPlugin = class extends import_obsidian5.Plugin {
       void this.activateView();
     });
   }
-  async onunload() {
-    await this.persistCache();
+  onunload() {
+    void this.persistCache();
   }
   async loadSettings() {
     const saved = await this.loadData();

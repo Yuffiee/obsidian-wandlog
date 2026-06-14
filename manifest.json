@@ -1,8 +1,8 @@
 {
   "id": "wandlog",
   "name": "Wandlog",
-  "version": "1.0.2",
-  "minAppVersion": "1.7.0",
+  "version": "1.0.3",
+  "minAppVersion": "1.8.9",
   "description": "Stroll through notes, mark your days.",
   "author": "Yuffiee",
   "isDesktopOnly": false

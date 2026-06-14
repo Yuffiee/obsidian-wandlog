@@ -1,0 +1,20 @@
+{
+  "name": "wandlog",
+  "version": "1.0.0",
+  "description": "Stroll through notes, mark your days",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "node esbuild.config.mjs production"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^16.11.6",
+    "builtin-modules": "^3.3.0",
+    "esbuild": "^0.17.0",
+    "obsidian": "^1.5.0",
+    "typescript": "^5.0.0"
+  }
+}

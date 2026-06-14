@@ -1,0 +1,1085 @@
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+// src/main.ts
+var main_exports = {};
+__export(main_exports, {
+  default: () => WandlogPlugin
+});
+module.exports = __toCommonJS(main_exports);
+var import_obsidian5 = require("obsidian");
+
+// src/settings.ts
+var import_obsidian2 = require("obsidian");
+
+// src/folder-suggest.ts
+var import_obsidian = require("obsidian");
+var FolderSuggest = class extends import_obsidian.AbstractInputSuggest {
+  constructor(app, inputEl, onSelect) {
+    super(app, inputEl);
+    this.onSelectCb = onSelect;
+  }
+  getSuggestions(query) {
+    const q = query.toLowerCase();
+    return this.app.vault.getAllLoadedFiles().filter((f) => f instanceof import_obsidian.TFolder).filter((f) => f.path.toLowerCase().contains(q) && !f.path.startsWith(".")).slice(0, 20).map((f) => f.path);
+  }
+  renderSuggestion(value, el) {
+    el.setText(value || "(vault root)");
+  }
+  selectSuggestion(value) {
+    this.onSelectCb(value || "");
+    this.inputEl.blur();
+  }
+};
+
+// src/i18n.ts
+var lang = (() => {
+  let l = "";
+  try {
+    l = (typeof moment !== "undefined" ? moment.locale() : "").toLowerCase();
+  } catch (e) {
+  }
+  l = l || (typeof navigator !== "undefined" ? navigator.language : "").toLowerCase();
+  return l.startsWith("zh");
+})();
+function t(zh, en) {
+  return lang ? zh : en;
+}
+
+// src/settings.ts
+var DEFAULT_SETTINGS = {
+  trackFolders: ["Journal"],
+  dailyWordTarget: 500,
+  excludeFolders: ["Work"],
+  todoFolders: [],
+  openInNewTab: true,
+  colorScheme: "green"
+};
+function addFolderListSetting(container, name, desc, currentValue, placeholder, app, onChange) {
+  new import_obsidian2.Setting(container).setName(name).setDesc(desc).addText((text) => {
+    text.setPlaceholder(placeholder).setValue(currentValue.join(", ")).onChange(async (val) => {
+      const folders = val.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+      onChange(folders);
+    });
+    new FolderSuggest(app, text.inputEl, (selected) => {
+      const raw = text.getValue().trim();
+      const folders = raw ? raw.split(",").map((s) => s.trim()).filter((s) => s) : [];
+      if (!folders.includes(selected)) {
+        folders.push(selected);
+      }
+      text.setValue(folders.join(", "));
+      text.onChanged();
+    });
+  });
+}
+var WandlogSettingTab = class extends import_obsidian2.PluginSettingTab {
+  constructor(app, plugin) {
+    super(app, plugin);
+    this.plugin = plugin;
+  }
+  display() {
+    const { containerEl } = this;
+    containerEl.empty();
+    containerEl.createEl("h2", { text: t("\u{1F4CA} \u70ED\u529B\u56FE", "\u{1F4CA} Heatmap") });
+    addFolderListSetting(
+      containerEl,
+      t("\u8FFD\u8E2A\u6587\u4EF6\u5939", "Track Folders"),
+      t(
+        "\u7528\u4E8E\u7EDF\u8BA1\u6BCF\u65E5\u5B57\u6570\u7684\u6587\u4EF6\u5939\uFF0C\u8F93\u5165\u65F6\u81EA\u52A8\u5339\u914D vault \u4E2D\u7684\u6587\u4EF6\u5939",
+        "Folders to track for daily word count."
+      ),
+      this.plugin.settings.trackFolders,
+      "Journal",
+      this.app,
+      async (folders) => {
+        this.plugin.settings.trackFolders = folders.length > 0 ? folders : ["Journal"];
+        await this.plugin.saveSettings();
+      }
+    );
+    new import_obsidian2.Setting(containerEl).setName(t("\u6BCF\u65E5\u76EE\u6807", "Daily Target")).setDesc(t("\u5B57\u6570\u7528\u4E8E\u70ED\u529B\u56FE\u914D\u8272", "Word count used for heatmap colors")).addSlider(
+      (slider) => slider.setLimits(100, 5e3, 100).setValue(this.plugin.settings.dailyWordTarget).setDynamicTooltip().onChange(async (val) => {
+        this.plugin.settings.dailyWordTarget = val;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian2.Setting(containerEl).setName(t("\u989C\u8272\u4E3B\u9898", "Color Scheme")).setDesc(t("\u70ED\u529B\u56FE\u7684\u914D\u8272\u65B9\u6848", "Heatmap color palette")).addDropdown(
+      (dropdown) => dropdown.addOption("green", t("\u9ED8\u8BA4", "Default")).addOption("blue", t("\u6D77\u6D0B", "Ocean")).addOption("purple", t("\u85B0\u8863\u8349", "Lavender")).addOption("warm", t("\u65E5\u843D", "Sunset")).addOption("teal", t("\u8584\u8377", "Mint")).setValue(this.plugin.settings.colorScheme).onChange(async (val) => {
+        this.plugin.settings.colorScheme = val;
+        await this.plugin.saveSettings();
+      })
+    );
+    containerEl.createEl("h2", { text: t("\u{1F3B2} \u968F\u673A\u6F2B\u6B65", "\u{1F3B2} Random") });
+    addFolderListSetting(
+      containerEl,
+      t("\u6392\u9664\u6587\u4EF6\u5939", "Exclude Folders"),
+      t(
+        "\u968F\u673A\u6F2B\u6B65\u5C06\u8DF3\u8FC7\u8FD9\u4E9B\u6587\u4EF6\u5939\u7684\u5185\u5BB9",
+        "Random will skip these folders."
+      ),
+      this.plugin.settings.excludeFolders,
+      "Work, Templates",
+      this.app,
+      async (folders) => {
+        this.plugin.settings.excludeFolders = folders;
+        await this.plugin.saveSettings();
+      }
+    );
+    containerEl.createEl("h2", { text: t("\u2611\uFE0F \u5F85\u529E\u4E8B\u9879", "\u2611\uFE0F Todo") });
+    addFolderListSetting(
+      containerEl,
+      t("\u5F85\u529E\u6587\u4EF6\u5939", "Todo Folders"),
+      t(
+        "\u5728\u8FD9\u4E9B\u6587\u4EF6\u5939\u4E2D\u67E5\u627E\u672A\u5B8C\u6210\u7684\u4EFB\u52A1",
+        "Find unchecked tasks in these folders"
+      ),
+      this.plugin.settings.todoFolders,
+      "Journal",
+      this.app,
+      async (folders) => {
+        this.plugin.settings.todoFolders = folders;
+        await this.plugin.saveSettings();
+      }
+    );
+    containerEl.createEl("h2", { text: t("\u{1F517} \u4EA4\u4E92", "\u{1F517} Interaction") });
+    new import_obsidian2.Setting(containerEl).setName(t("\u6253\u5F00\u65B9\u5F0F", "Open In")).setDesc(
+      t(
+        "\u70B9\u51FB\u65E5\u671F\u65B9\u5757\u3001\u5361\u7247\u6216\u5F85\u529E\u4E8B\u9879\u65F6\u5728\u65B0\u6807\u7B7E\u9875\u8FD8\u662F\u5F53\u524D\u6807\u7B7E\u9875\u6253\u5F00",
+        "Open in new tab or current tab on click"
+      )
+    ).addDropdown(
+      (dropdown) => dropdown.addOption("new", t("\u65B0\u6807\u7B7E\u9875", "New Tab")).addOption("current", t("\u5F53\u524D\u6807\u7B7E\u9875", "Current Tab")).setValue(this.plugin.settings.openInNewTab ? "new" : "current").onChange(async (val) => {
+        this.plugin.settings.openInNewTab = val === "new";
+        await this.plugin.saveSettings();
+      })
+    );
+  }
+};
+
+// src/utils.ts
+function wordCount(text) {
+  const cjkRe = /[\u4e00-\u9fff\u3400-\u4dbf\u3000-\u303f\uff00-\uffef\ufe30-\ufe4f\u{20000}-\u{2a6df}\u{2a700}-\u{2b73f}\u{2b740}-\u{2b81f}\u{2b820}-\u{2ceaf}\u{2ceb0}-\u{2ebef}\u{30000}-\u{3134f}\u{f900}-\u{faff}]/gu;
+  const cjkCount = (text.match(cjkRe) || []).length;
+  const nonCjk = text.replace(cjkRe, " ").trim();
+  const wordCount2 = nonCjk ? nonCjk.split(/\s+/).filter((w) => w.length > 0).length : 0;
+  return cjkCount + wordCount2;
+}
+function dateFromFilename(name) {
+  const m1 = name.match(/^(\d{4})-(\d{2})-(\d{2})\.md$/);
+  if (m1)
+    return `${m1[1]}-${m1[2]}-${m1[3]}`;
+  const m2 = name.match(/^(\d{4})(\d{2})(\d{2})\.md$/);
+  return m2 ? `${m2[1]}-${m2[2]}-${m2[3]}` : null;
+}
+function stripFrontMatter(text) {
+  if (text.startsWith("---")) {
+    const end = text.indexOf("---", 3);
+    if (end !== -1)
+      return text.slice(end + 3).trimStart();
+  }
+  return text;
+}
+var LEAF_RE = /^(\s*)([-*+])\s+(.*)/;
+function extractLeafItems(text, filePath) {
+  const lines = text.split("\n");
+  const items = [];
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(LEAF_RE);
+    if (m) {
+      items.push({
+        index: i,
+        indent: m[1].length,
+        marker: m[2],
+        text: m[3],
+        fullLine: lines[i]
+      });
+    }
+  }
+  const result = [];
+  for (let i = 0; i < items.length; i++) {
+    const cur = items[i];
+    const next = items[i + 1];
+    if (next !== void 0 && next.indent > cur.indent)
+      continue;
+    const clean = cur.text.trim();
+    result.push({
+      filePath,
+      lineNumber: cur.index,
+      text: cur.fullLine.trim(),
+      cleanText: clean,
+      wordCount: wordCount(clean)
+    });
+  }
+  return result;
+}
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+function arrayEqual(a, b) {
+  if (a.length !== b.length)
+    return false;
+  const sa = [...a].sort();
+  const sb = [...b].sort();
+  return sa.every((v, i) => v === sb[i]);
+}
+function dateString(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+function shortPath(filePath) {
+  const parts = filePath.split("/");
+  if (parts.length <= 2)
+    return filePath;
+  return `\u2026/${parts.slice(-2).join("/")}`;
+}
+
+// src/indexer.ts
+var BATCH_SIZE = 20;
+var Indexer = class {
+  constructor(app, settings) {
+    this.app = app;
+    this.settings = settings;
+    this.cache = {
+      lastFullScan: 0,
+      leafItems: {},
+      dailyWordCounts: {}
+    };
+  }
+  getCache() {
+    return this.cache;
+  }
+  async initialize(cached) {
+    if (cached)
+      this.cache = cached;
+    await this.fullScan();
+  }
+  async fullScan() {
+    const files = this.app.vault.getMarkdownFiles();
+    const now = Date.now();
+    for (let i = 0; i < files.length; i += BATCH_SIZE) {
+      const batch = files.slice(i, i + BATCH_SIZE);
+      await Promise.all(batch.map((f) => this.indexFile(f)));
+      await sleep(0);
+    }
+    this.cache.lastFullScan = now;
+  }
+  async indexFile(file) {
+    const filePath = file.path;
+    const name = file.name;
+    const isExcluded = this.isInFolders(filePath, this.settings.excludeFolders);
+    const isTracked = this.isInFolders(filePath, this.settings.trackFolders);
+    let content;
+    try {
+      content = await this.app.vault.cachedRead(file);
+    } catch (e) {
+      console.warn(`[Wandlog] Failed to read: ${filePath}`);
+      return;
+    }
+    if (isExcluded) {
+      delete this.cache.leafItems[filePath];
+    } else {
+      this.cache.leafItems[filePath] = extractLeafItems(content, filePath);
+    }
+    if (isTracked) {
+      const d = dateFromFilename(name);
+      if (d) {
+        const body = stripFrontMatter(content);
+        this.cache.dailyWordCounts[d] = wordCount(body);
+      }
+    }
+  }
+  onFileChanged(file) {
+    if (file.extension !== "md")
+      return;
+    this.indexFile(file);
+  }
+  onFileDeleted(filePath) {
+    delete this.cache.leafItems[filePath];
+    const fileName = filePath.split("/").pop() || "";
+    const d = dateFromFilename(fileName);
+    if (d)
+      delete this.cache.dailyWordCounts[d];
+  }
+  onFileCreated(file) {
+    if (file.extension !== "md")
+      return;
+    this.indexFile(file);
+  }
+  onFileRenamed(file, oldPath) {
+    this.onFileDeleted(oldPath);
+    this.indexFile(file);
+  }
+  updateSettings(settings) {
+    const oldExclude = this.settings.excludeFolders;
+    const oldTrack = this.settings.trackFolders;
+    this.settings = settings;
+    if (!arrayEqual(oldExclude, settings.excludeFolders) || !arrayEqual(oldTrack, settings.trackFolders)) {
+      this.fullScan();
+    }
+  }
+  getAllLeafItems() {
+    const all = [];
+    for (const items of Object.values(this.cache.leafItems)) {
+      all.push(...items);
+    }
+    return all;
+  }
+  getFilteredLeafItems() {
+    return this.getAllLeafItems();
+  }
+  /**
+   * Find unchecked tasks from the specified folders.
+   * Scans markdown files directly (does not use the cached leafItems).
+   */
+  async getUncheckedTasks(folders) {
+    if (folders.length === 0)
+      return [];
+    const result = [];
+    const files = this.app.vault.getMarkdownFiles();
+    for (const file of files) {
+      if (!this.isInFolders(file.path, folders))
+        continue;
+      let content;
+      try {
+        content = await this.app.vault.cachedRead(file);
+      } catch (e) {
+        console.warn("[Wandlog] Failed to read file for tasks:", (e == null ? void 0 : e.message) || e);
+        continue;
+      }
+      const lines = content.split("\n");
+      for (let i = 0; i < lines.length; i++) {
+        const taskMatch = lines[i].match(/^(\s*)[-*+]\s+\[\s\]\s+(.+)/u);
+        if (taskMatch) {
+          result.push({
+            filePath: file.path,
+            lineNumber: i,
+            text: lines[i].trim(),
+            cleanText: taskMatch[2].trim()
+          });
+        }
+      }
+    }
+    return result;
+  }
+  getDailyWordCounts() {
+    return { ...this.cache.dailyWordCounts };
+  }
+  isInFolders(path, folders) {
+    for (const folder of folders) {
+      if (path === folder || path.startsWith(folder + "/"))
+        return true;
+    }
+    return false;
+  }
+};
+
+// src/view.ts
+var import_obsidian4 = require("obsidian");
+
+// src/heatmap.ts
+var Heatmap = class {
+  constructor(container, dailyWordTarget, colorScheme, onDayClick) {
+    this.resizeObserver = null;
+    this.lastDailyCounts = {};
+    this.lastExistingDates = /* @__PURE__ */ new Set();
+    this.renderTimer = null;
+    this.tooltipEl = null;
+    this.container = container;
+    this.dailyWordTarget = dailyWordTarget;
+    this.colorScheme = colorScheme;
+    this.onDayClick = onDayClick != null ? onDayClick : null;
+  }
+  updateTarget(target) {
+    this.dailyWordTarget = target;
+    this.doRender();
+  }
+  updateScheme(scheme) {
+    this.colorScheme = scheme;
+    this.doRender();
+  }
+  render(counts, existingDates) {
+    var _a;
+    this.lastDailyCounts = counts;
+    this.lastExistingDates = existingDates != null ? existingDates : /* @__PURE__ */ new Set();
+    (_a = this.resizeObserver) == null ? void 0 : _a.disconnect();
+    this.resizeObserver = new ResizeObserver(() => this.scheduleRender());
+    this.resizeObserver.observe(this.container);
+    this.doRender();
+  }
+  destroy() {
+    var _a;
+    (_a = this.resizeObserver) == null ? void 0 : _a.disconnect();
+    this.resizeObserver = null;
+  }
+  scheduleRender() {
+    if (this.renderTimer)
+      clearTimeout(this.renderTimer);
+    this.renderTimer = window.setTimeout(() => this.doRender(), 100);
+  }
+  doRender() {
+    this.container.empty();
+    this.container.addClass("tm-heatmap-container");
+    const schemeClass = "tm-scheme-" + this.colorScheme;
+    this.container.className.split(" ").forEach((cls) => {
+      if (cls.startsWith("tm-scheme-") && cls !== schemeClass) {
+        this.container.removeClass(cls);
+      }
+    });
+    if (!this.container.hasClass(schemeClass)) {
+      this.container.addClass(schemeClass);
+    }
+    const width = this.container.clientWidth;
+    if (width < 20)
+      return;
+    const cols = Math.max(4, Math.floor(width / 20));
+    const today = /* @__PURE__ */ new Date();
+    const start = new Date(today.getTime() - (cols * 7 - 1) * 864e5);
+    const weeks = [];
+    const cursor = new Date(start);
+    for (let w = 0; w < cols; w++) {
+      const week = [];
+      for (let d = 0; d < 7; d++) {
+        week.push({
+          date: dateString(cursor),
+          count: this.lastDailyCounts[dateString(cursor)] || 0
+        });
+        cursor.setDate(cursor.getDate() + 1);
+      }
+      weeks.push(week);
+    }
+    if (weeks.length === 0)
+      return;
+    const cells = this.container.createDiv("tm-heatmap-cells");
+    cells.style.gridTemplateRows = "repeat(7, 14px)";
+    cells.style.gridTemplateColumns = `repeat(${weeks.length}, 1fr)`;
+    cells.style.gap = "6px";
+    const target = this.dailyWordTarget;
+    const todayStr = dateString(today);
+    const todayGridRow = (today.getDay() + 6) % 7;
+    const startRow = (todayGridRow + 1) % 7;
+    for (let r = 0; r < 7; r++) {
+      const row = (startRow + r) % 7;
+      for (let col = 0; col < weeks.length; col++) {
+        const cell = weeks[col][row];
+        if (!cell)
+          continue;
+        const el = cells.createDiv("tm-heatmap-cell");
+        const hasNote = this.lastExistingDates.has(cell.date);
+        const isToday = cell.date === todayStr;
+        if (cell.count === 0) {
+          el.addClass("tm-heatmap-empty");
+        } else {
+          const ratio = Math.min(cell.count / target, 1.5);
+          if (ratio >= 1)
+            el.addClass("tm-heatmap-l4");
+          else if (ratio >= 0.75)
+            el.addClass("tm-heatmap-l3");
+          else if (ratio >= 0.5)
+            el.addClass("tm-heatmap-l2");
+          else if (ratio >= 0.25)
+            el.addClass("tm-heatmap-l1");
+          else
+            el.addClass("tm-heatmap-l0");
+        }
+        if (isToday)
+          el.addClass("tm-heatmap-today");
+        el.addEventListener(
+          "mouseenter",
+          (e) => this.showTooltip(e.target, cell.date, cell.count)
+        );
+        el.addEventListener("mouseleave", () => this.hideTooltip());
+        el.addEventListener("click", () => this.hideTooltip());
+        if (hasNote && this.onDayClick) {
+          el.addClass("tm-heatmap-clickable");
+          el.addEventListener("click", () => {
+            var _a;
+            return (_a = this.onDayClick) == null ? void 0 : _a.call(this, cell.date);
+          });
+        }
+      }
+    }
+  }
+  showTooltip(el, date, count) {
+    this.hideTooltip();
+    const tooltip = document.createElement("div");
+    tooltip.addClass("tm-heatmap-tooltip");
+    const pct = this.dailyWordTarget > 0 ? Math.round(count / this.dailyWordTarget * 100) : 0;
+    tooltip.createDiv({
+      text: `${count}${t(" \u5B57", " chars")}  \xB7  ${pct}%`
+    });
+    tooltip.createDiv({ cls: "tm-heatmap-tooltip-date", text: date });
+    document.body.appendChild(tooltip);
+    const rect = el.getBoundingClientRect();
+    const half = tooltip.offsetWidth / 2;
+    const x = Math.max(
+      half + 5,
+      Math.min(rect.left + rect.width / 2, window.innerWidth - half - 5)
+    );
+    tooltip.style.left = `${x}px`;
+    tooltip.style.top = `${rect.top - 38}px`;
+    this.tooltipEl = tooltip;
+  }
+  hideTooltip() {
+    if (this.tooltipEl) {
+      this.tooltipEl.remove();
+      this.tooltipEl = null;
+    }
+  }
+};
+
+// src/card-walk.ts
+var import_obsidian3 = require("obsidian");
+var CardWalk = class {
+  constructor(container, onCardClick, onRefresh, app) {
+    this.allItems = [];
+    this.container = container;
+    this.onCardClick = onCardClick;
+    this.onRefresh = onRefresh;
+    this.app = app;
+  }
+  setItems(items) {
+    this.allItems = items;
+  }
+  refresh() {
+    const card = this.pickOne();
+    this.renderCard(card);
+  }
+  /** Pick one random item from allItems. */
+  pickOne() {
+    var _a;
+    if (this.allItems.length === 0)
+      return null;
+    const seen = /* @__PURE__ */ new Set();
+    const unique = [];
+    for (const item of this.allItems) {
+      if (seen.has(item.cleanText))
+        continue;
+      seen.add(item.cleanText);
+      unique.push(item);
+    }
+    const shuffled = shuffle(unique);
+    return (_a = shuffled[0]) != null ? _a : null;
+  }
+  renderCard(card) {
+    this.container.empty();
+    this.container.addClass("tm-cards-container");
+    if (!card) {
+      const emptyEl = this.container.createDiv("tm-cards-empty");
+      emptyEl.setText(
+        t(
+          "\u6682\u65E0\u7B26\u5408\u6761\u4EF6\u7684\u6458\u5F55\u3002\n\u8BF7\u5728\u8BBE\u7F6E\u4E2D\u8C03\u6574\u6392\u9664\u6587\u4EF6\u5939\u3002",
+          "No matching items found.\nAdjust exclude folders in settings."
+        )
+      );
+      const settingsBtn = emptyEl.createEl("button", { cls: "tm-settings-link" });
+      settingsBtn.setText(t("\u6253\u5F00\u8BBE\u7F6E", "Open Settings"));
+      settingsBtn.addEventListener("click", () => {
+        this.app.setting.open();
+        this.app.setting.openTabById("wandlog");
+      });
+      return;
+    }
+    const container = this.container.createDiv("tm-card-single");
+    const displayText = card.cleanText;
+    container.createSpan({ cls: "tm-card-text", text: displayText });
+    container.createSpan({ cls: "tm-card-meta", text: shortPath(card.filePath) });
+    container.addEventListener("click", () => {
+      this.onCardClick(card);
+    });
+    container.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      new import_obsidian3.Menu().addItem(
+        (menuItem) => menuItem.setTitle(t("\u590D\u5236\u5230\u526A\u8D34\u677F", "Copy to clipboard")).setIcon("copy").onClick(() => {
+          navigator.clipboard.writeText(card.cleanText);
+          new import_obsidian3.Notice(t("\u5DF2\u590D\u5236", "Copied"));
+        })
+      ).addItem(
+        (menuItem) => menuItem.setTitle(t("\u5220\u9664", "Delete")).setIcon("trash").setWarning(true).onClick(
+          () => new ConfirmModal(
+            this.app,
+            t("\u786E\u8BA4\u5220\u9664\uFF1F", "Delete this card?"),
+            () => this.deleteItem(card)
+          ).open()
+        )
+      ).showAtMouseEvent(e);
+    });
+    container.setAttr("tabindex", "0");
+    container.setAttr("role", "button");
+  }
+  async deleteItem(item) {
+    try {
+      const file = this.app.vault.getAbstractFileByPath(item.filePath);
+      if (!file) {
+        new import_obsidian3.Notice(`File not found: ${item.filePath}`);
+        return;
+      }
+      const content = await this.app.vault.read(file);
+      const lines = content.split("\n");
+      const lineIndex = lines.findIndex((line) => line.trim() === item.text);
+      if (lineIndex === -1) {
+        new import_obsidian3.Notice(t("\u672A\u627E\u5230\u5339\u914D\u7684\u884C", "Line not found"));
+        return;
+      }
+      lines.splice(lineIndex, 1);
+      const newContent = lines.join("\n");
+      await this.app.vault.modify(file, newContent);
+      this.allItems = this.allItems.filter(
+        (it) => !(it.filePath === item.filePath && it.cleanText === item.cleanText)
+      );
+      new import_obsidian3.Notice(t("\u5DF2\u5220\u9664", "Deleted"));
+      this.refresh();
+    } catch (e) {
+      console.error("[Wandlog] Delete failed:", e);
+      new import_obsidian3.Notice(t("\u5220\u9664\u5931\u8D25", "Delete failed"));
+    }
+  }
+};
+var ConfirmModal = class extends import_obsidian3.Modal {
+  constructor(app, message, onConfirm) {
+    super(app);
+    this.message = message;
+    this.onConfirm = onConfirm;
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.createEl("p", { text: this.message });
+    const btnRow = contentEl.createDiv("modal-button-container");
+    btnRow.createEl("button", { text: t("\u53D6\u6D88", "Cancel"), cls: "mod-cta" }).addEventListener("click", () => this.close());
+    btnRow.createEl("button", { text: t("\u5220\u9664", "Delete"), cls: "mod-warning" }).addEventListener("click", () => {
+      this.onConfirm();
+      this.close();
+    });
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
+
+// src/view.ts
+var VIEW_TYPE = "wandlog-view";
+var WandlogView = class extends import_obsidian4.ItemView {
+  constructor(leaf, plugin) {
+    super(leaf);
+    this.heatmap = null;
+    this.cardWalk = null;
+    this.todoInner = null;
+    /** Cached map of date→TFile for daily-note lookup. */
+    this.dailyNoteCache = null;
+    this.plugin = plugin;
+  }
+  getViewType() {
+    return VIEW_TYPE;
+  }
+  getDisplayText() {
+    return t("Wandlog", "Wandlog");
+  }
+  getIcon() {
+    return "footprints";
+  }
+  async onOpen() {
+    const container = this.containerEl.children[1];
+    container.empty();
+    container.addClass("tm-view-container");
+    const loadingEl = container.createDiv("tm-loading");
+    loadingEl.createDiv("tm-loading-spinner");
+    loadingEl.createSpan({ text: t("\u6B63\u5728\u7D22\u5F15\u7B14\u8BB0\u2026", "Indexing notes\u2026") });
+    const heatmapSection = container.createDiv("tm-section");
+    this.makeSectionHeader(heatmapSection, t("\u{1F4CA} \u70ED\u529B\u56FE", "\u{1F4CA} Heatmap"));
+    const heatmapInner = heatmapSection.createDiv("tm-heatmap-inner");
+    this.heatmap = new Heatmap(
+      heatmapInner,
+      this.plugin.settings.dailyWordTarget,
+      this.plugin.settings.colorScheme,
+      (date) => this.openDailyNote(date)
+    );
+    const cardSection = container.createDiv("tm-section tm-cards-section");
+    const cardHeader = this.makeSectionHeader(cardSection, t("\u{1F3B2} \u968F\u673A\u6F2B\u6B65", "\u{1F3B2} Random"));
+    const diceBtn = cardHeader.createEl("button", {
+      cls: "tm-dice-btn"
+    });
+    (0, import_obsidian4.setIcon)(diceBtn, "dice");
+    diceBtn.setAttr("aria-label", t("\u6362\u4E00\u5F20", "Next card"));
+    diceBtn.addEventListener("click", () => this.refreshCards());
+    const cardInner = cardSection.createDiv("tm-cards-inner");
+    this.cardWalk = new CardWalk(
+      cardInner,
+      (item) => this.openSourceFile(item),
+      () => this.refreshCards(),
+      this.app
+    );
+    const todoSection = container.createDiv("tm-section tm-todo-section");
+    this.makeSectionHeader(todoSection, t("\u2611\uFE0F \u5F85\u529E\u4E8B\u9879", "\u2611\uFE0F Todo"));
+    const todoInner = todoSection.createDiv("tm-todo-inner");
+    this.todoInner = todoInner;
+    this.refreshHeatmap();
+    this.refreshCards();
+    this.refreshTodos();
+    loadingEl.addClass("tm-loading-done");
+  }
+  async onClose() {
+    var _a;
+    (_a = this.heatmap) == null ? void 0 : _a.destroy();
+    this.heatmap = null;
+    this.cardWalk = null;
+  }
+  refreshHeatmap() {
+    if (!this.heatmap)
+      return;
+    const counts = this.plugin.indexer.getDailyWordCounts();
+    const dates = this.buildExistingDatesSet();
+    this.heatmap.render(counts, dates);
+  }
+  invalidateDatesCache() {
+    this.dailyNoteCache = null;
+  }
+  refreshCards() {
+    if (!this.cardWalk)
+      return;
+    const items = this.plugin.indexer.getFilteredLeafItems();
+    this.cardWalk.setItems(items);
+    this.cardWalk.refresh();
+  }
+  onSettingsChanged() {
+    if (this.heatmap) {
+      this.heatmap.updateTarget(this.plugin.settings.dailyWordTarget);
+      this.heatmap.updateScheme(this.plugin.settings.colorScheme);
+    }
+    this.refreshHeatmap();
+    this.refreshTodos();
+  }
+  async refreshTodos() {
+    try {
+      if (!this.todoInner)
+        return;
+      this.todoInner.empty();
+      const folders = this.plugin.settings.todoFolders;
+      if (folders.length === 0) {
+        this.todoInner.createDiv("tm-todo-empty").setText(
+          t("\u8BF7\u5728\u8BBE\u7F6E\u4E2D\u6307\u5B9A\u5F85\u529E\u6587\u4EF6\u5939", "Set todo folders in settings")
+        );
+        return;
+      }
+      const tasks = await this.plugin.indexer.getUncheckedTasks(folders);
+      if (tasks.length === 0) {
+        this.todoInner.createDiv("tm-todo-empty").setText(
+          t("\u6CA1\u6709\u672A\u5B8C\u6210\u7684\u4EFB\u52A1", "No unchecked tasks")
+        );
+        return;
+      }
+      const section = this.todoInner.closest(".tm-section");
+      const titleEl = section == null ? void 0 : section.querySelector(".tm-section-title");
+      if (titleEl) {
+        titleEl.textContent = t("\u2611\uFE0F \u5F85\u529E\u4E8B\u9879", "\u2611\uFE0F Todo") + ` (${tasks.length})`;
+      }
+      const list = this.todoInner.createEl("ul", { cls: "tm-todo-list" });
+      for (const task of tasks) {
+        const li = list.createEl("li", { cls: "tm-todo-item" });
+        const cb = li.createEl("span", { cls: "tm-todo-checkbox", text: "\u2610" });
+        cb.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.markTaskComplete(task);
+        });
+        const textSpan = li.createSpan({ cls: "tm-todo-text", text: task.cleanText });
+        textSpan.addEventListener("click", () => this.openSourceFile(task));
+        li.createSpan({ cls: "tm-todo-meta", text: shortPath(task.filePath) });
+        li.addEventListener("contextmenu", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          new import_obsidian4.Menu().addItem(
+            (item) => item.setTitle(t("\u590D\u5236\u5230\u526A\u8D34\u677F", "Copy to clipboard")).setIcon("copy").onClick(() => {
+              navigator.clipboard.writeText(task.cleanText);
+              new import_obsidian4.Notice(t("\u5DF2\u590D\u5236", "Copied"));
+            })
+          ).addItem(
+            (menuItem) => menuItem.setTitle(t("\u5220\u9664", "Delete")).setIcon("trash").setWarning(true).onClick(() => this.deleteTodo(task))
+          ).showAtMouseEvent(e);
+        });
+        li.setAttr("tabindex", "0");
+        li.setAttr("role", "button");
+      }
+    } catch (e) {
+      const msg = String(e).slice(0, 200);
+      if (this.todoInner) {
+        this.todoInner.createDiv("tm-todo-empty").setText(t("\u9519\u8BEF\uFF1A" + msg, "Error: " + msg));
+      }
+      console.error("[Wandlog] refreshTodos error:", e);
+    }
+  }
+  async markTaskComplete(task) {
+    try {
+      const file = this.app.vault.getAbstractFileByPath(task.filePath);
+      if (!file) {
+        new import_obsidian4.Notice(`File not found: ${task.filePath}`);
+        return;
+      }
+      const content = await this.app.vault.read(file);
+      const lines = content.split("\n");
+      const lineIndex = lines.findIndex((line) => line.trim() === task.text);
+      if (lineIndex === -1) {
+        new import_obsidian4.Notice(t("\u672A\u627E\u5230\u5339\u914D\u7684\u884C", "Line not found"));
+        return;
+      }
+      lines[lineIndex] = lines[lineIndex].replace("[ ]", "[x]");
+      await this.app.vault.modify(file, lines.join("\n"));
+      new import_obsidian4.Notice(t("\u5DF2\u6807\u8BB0\u5B8C\u6210 \u2705", "Marked done \u2705"));
+      this.refreshTodos();
+    } catch (e) {
+      console.error("[Wandlog] Mark task complete failed:", e);
+      new import_obsidian4.Notice(t("\u64CD\u4F5C\u5931\u8D25", "Failed"));
+    }
+  }
+  /** Create a simple static section header (no collapse). */
+  makeSectionHeader(section, title) {
+    const header = section.createDiv("tm-section-header");
+    header.createSpan({ cls: "tm-section-title", text: title });
+    return header;
+  }
+  async deleteTodo(task) {
+    try {
+      const file = this.app.vault.getAbstractFileByPath(task.filePath);
+      if (!file) {
+        new import_obsidian4.Notice(`File not found: ${task.filePath}`);
+        return;
+      }
+      const content = await this.app.vault.read(file);
+      const lines = content.split("\n");
+      const lineIndex = lines.findIndex((line) => line.trim() === task.text);
+      if (lineIndex === -1) {
+        new import_obsidian4.Notice(t("\u672A\u627E\u5230\u5339\u914D\u7684\u884C", "Line not found"));
+        return;
+      }
+      lines.splice(lineIndex, 1);
+      const newContent = lines.join("\n");
+      await this.app.vault.modify(file, newContent);
+      new import_obsidian4.Notice(t("\u5DF2\u5220\u9664", "Deleted"));
+      this.refreshTodos();
+    } catch (e) {
+      console.error("[Wandlog] Delete todo failed:", e);
+      new import_obsidian4.Notice(t("\u5220\u9664\u5931\u8D25", "Delete failed"));
+    }
+  }
+  invalidateDailyNoteCache() {
+    this.dailyNoteCache = null;
+  }
+  buildDailyNoteMap() {
+    if (this.dailyNoteCache)
+      return this.dailyNoteCache;
+    const map = {};
+    const tracked = this.plugin.settings.trackFolders;
+    for (const file of this.plugin.app.vault.getMarkdownFiles()) {
+      if (tracked.some((f) => file.path === f || file.path.startsWith(f + "/"))) {
+        const d = dateFromFilename(file.name);
+        if (d)
+          map[d] = file;
+        map[file.name.replace(/\.md$/, "")] = file;
+        map[file.name.replace(/-/g, "").replace(/\.md$/, "")] = file;
+      }
+    }
+    this.dailyNoteCache = map;
+    return map;
+  }
+  buildExistingDatesSet() {
+    return new Set(Object.keys(this.buildDailyNoteMap()));
+  }
+  async openDailyNote(date) {
+    const leaf = this.app.workspace.getLeaf(
+      this.plugin.settings.openInNewTab ? "tab" : false
+    );
+    const map = this.buildDailyNoteMap();
+    const file = map[date];
+    if (file) {
+      await leaf.openFile(file);
+      return;
+    }
+    let note = this.app.vault.getAbstractFileByPath(date + ".md");
+    if (!note)
+      note = this.app.vault.getAbstractFileByPath(date.replace(/-/g, "") + ".md");
+    if (note)
+      await leaf.openFile(note);
+  }
+  async openSourceFile(item) {
+    const file = this.app.vault.getAbstractFileByPath(item.filePath);
+    if (!file) {
+      new import_obsidian4.Notice(`File not found: ${item.filePath}`);
+      return;
+    }
+    const leaf = this.app.workspace.getLeaf(
+      this.plugin.settings.openInNewTab ? "tab" : false
+    );
+    await leaf.openFile(file);
+    const activeView = leaf.view;
+    if (!(activeView == null ? void 0 : activeView.editor))
+      return;
+    try {
+      const editor = activeView.editor;
+      const goToLine = () => {
+        try {
+          editor.setCursor({ line: item.lineNumber, ch: 0 });
+          editor.scrollIntoView(
+            { from: { line: item.lineNumber, ch: 0 }, to: { line: item.lineNumber, ch: 0 } },
+            true
+          );
+        } catch (e) {
+          console.warn("[Wandlog] Failed to scroll to line:", e);
+        }
+      };
+      if (typeof editor.getCursor === "function") {
+        goToLine();
+      } else {
+        requestAnimationFrame(goToLine);
+      }
+    } catch (e) {
+      console.warn("[Wandlog] Failed to open source file:", e);
+    }
+  }
+};
+
+// src/main.ts
+var WandlogPlugin = class extends import_obsidian5.Plugin {
+  constructor() {
+    super(...arguments);
+    this.view = null;
+    this.refreshTimeout = null;
+  }
+  async onload() {
+    await this.loadSettings();
+    this.indexer = new Indexer(this.app, this.settings);
+    const saved = await this.loadData();
+    await this.indexer.initialize(saved == null ? void 0 : saved.indexerCache);
+    this.registerView(VIEW_TYPE, (leaf) => {
+      this.view = new WandlogView(leaf, this);
+      return this.view;
+    });
+    this.addRibbonIcon("footprints", t("Wandlog", "Wandlog"), () => {
+      this.activateView();
+    });
+    this.addCommand({
+      id: "open-wandlog",
+      name: t("\u6253\u5F00 Wandlog", "Open Wandlog"),
+      callback: () => this.activateView()
+    });
+    this.addCommand({
+      id: "refresh-cards",
+      name: t("\u5237\u65B0\u968F\u673A\u5361\u7247", "Refresh Random Cards"),
+      callback: () => {
+        var _a;
+        return (_a = this.view) == null ? void 0 : _a.refreshCards();
+      }
+    });
+    this.addSettingTab(new WandlogSettingTab(this.app, this));
+    this.registerEvent(
+      this.app.vault.on("modify", (file) => {
+        if (file instanceof import_obsidian5.TFile && file.extension === "md") {
+          this.indexer.onFileChanged(file);
+          this.debounceRefresh();
+        }
+      })
+    );
+    this.registerEvent(
+      this.app.vault.on("create", (file) => {
+        var _a, _b;
+        if (file instanceof import_obsidian5.TFile && file.extension === "md") {
+          this.indexer.onFileCreated(file);
+          (_a = this.view) == null ? void 0 : _a.invalidateDatesCache();
+          (_b = this.view) == null ? void 0 : _b.invalidateDailyNoteCache();
+          this.debounceRefresh();
+        }
+      })
+    );
+    this.registerEvent(
+      this.app.vault.on("delete", (file) => {
+        var _a, _b;
+        if (file instanceof import_obsidian5.TFile && file.extension === "md") {
+          this.indexer.onFileDeleted(file.path);
+          (_a = this.view) == null ? void 0 : _a.invalidateDatesCache();
+          (_b = this.view) == null ? void 0 : _b.invalidateDailyNoteCache();
+          this.debounceRefresh();
+        }
+      })
+    );
+    this.registerEvent(
+      this.app.vault.on("rename", (file, oldPath) => {
+        if (file instanceof import_obsidian5.TFile && file.extension === "md") {
+          this.indexer.onFileRenamed(file, oldPath);
+          this.debounceRefresh();
+        }
+      })
+    );
+    this.registerInterval(window.setInterval(() => this.persistCache(), 3e4));
+    this.app.workspace.onLayoutReady(() => {
+      this.activateView();
+    });
+  }
+  async onunload() {
+    await this.persistCache();
+  }
+  async loadSettings() {
+    const saved = await this.loadData();
+    const raw = (saved == null ? void 0 : saved.settings) || {};
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, raw);
+  }
+  async saveSettings() {
+    var _a;
+    await this.saveData({
+      settings: this.settings,
+      indexerCache: this.indexer.getCache()
+    });
+    await this.indexer.updateSettings(this.settings);
+    (_a = this.view) == null ? void 0 : _a.onSettingsChanged();
+  }
+  async persistCache() {
+    await this.saveData({
+      settings: this.settings,
+      indexerCache: this.indexer.getCache()
+    });
+  }
+  async activateView() {
+    const { workspace } = this.app;
+    const leaves = workspace.getLeavesOfType(VIEW_TYPE);
+    if (leaves.length > 0) {
+      workspace.revealLeaf(leaves[0]);
+      return;
+    }
+    const leaf = workspace.getRightLeaf(false);
+    if (leaf) {
+      await leaf.setViewState({ type: VIEW_TYPE, active: true });
+      workspace.revealLeaf(leaf);
+    }
+  }
+  debounceRefresh() {
+    if (this.refreshTimeout !== null) {
+      clearTimeout(this.refreshTimeout);
+    }
+    this.refreshTimeout = window.setTimeout(() => {
+      var _a, _b, _c;
+      (_a = this.view) == null ? void 0 : _a.refreshHeatmap();
+      (_b = this.view) == null ? void 0 : _b.refreshCards();
+      (_c = this.view) == null ? void 0 : _c.refreshTodos();
+    }, 500);
+  }
+};

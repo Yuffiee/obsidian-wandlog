@@ -983,8 +983,8 @@ var WandlogPlugin = class extends import_obsidian5.Plugin {
     this.registerView(VIEW_TYPE, (leaf) => {
       return new WandlogView(leaf, this);
     });
-    this.addRibbonIcon("footprints", t("Wandlog", "Wandlog"), async () => {
-      this.activateView();
+    this.addRibbonIcon("footprints", t("Wandlog", "Wandlog"), () => {
+      void this.activateView();
     });
     this.addCommand({
       id: "open",
@@ -1039,8 +1039,8 @@ var WandlogPlugin = class extends import_obsidian5.Plugin {
       })
     );
     this.registerInterval(window.setInterval(() => void this.persistCache(), 3e4));
-    this.app.workspace.onLayoutReady(async () => {
-      this.activateView();
+    this.app.workspace.onLayoutReady(() => {
+      void this.activateView();
     });
   }
   async onunload() {
@@ -1083,7 +1083,7 @@ var WandlogPlugin = class extends import_obsidian5.Plugin {
     if (this.refreshTimeout !== null) {
       window.clearTimeout(this.refreshTimeout);
     }
-    this.refreshTimeout = window.setTimeout(async () => {
+    this.refreshTimeout = window.setTimeout(() => {
       var _a, _b, _c;
       void ((_a = this.activeView) == null ? void 0 : _a.refreshHeatmap());
       void ((_b = this.activeView) == null ? void 0 : _b.refreshCards());

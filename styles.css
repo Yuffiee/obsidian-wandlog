@@ -206,8 +206,7 @@
 .tm-card-single {
   display: flex;
   flex-direction: column;
-  max-height: 180px;
-  min-height: 120px;
+  height: 120px;
   padding: 12px;
   border: 1px solid var(--background-modifier-border);
   border-radius: 8px;
@@ -226,7 +225,7 @@
   color: var(--text-normal);
   word-break: break-word;
   display: -webkit-box;
-  -webkit-line-clamp: 5;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
   margin-bottom: 4px;
@@ -302,7 +301,7 @@
   color: var(--text-normal);
   word-break: break-word;
   display: -webkit-box;
-  -webkit-line-clamp: 5;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }

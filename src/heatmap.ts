@@ -104,12 +104,10 @@ export class Heatmap {
     const target = this.dailyWordTarget;
     const todayStr = dateString(today);
 
-    // Rotate rows so today is always the last row (bottom-right)
-    const todayGridRow = (today.getDay() + 6) % 7; // Sun→6, Mon→0, ..., Sat→5
-    const startRow = (todayGridRow + 1) % 7;
-
+    // Render rows in natural order: today is always the last grid cell,
+    // so it lands on the bottom row (bottom-right corner).
     for (let r = 0; r < 7; r++) {
-      const row = (startRow + r) % 7;
+      const row = r;
       for (let col = 0; col < weeks.length; col++) {
         const cell = weeks[col][row];
         if (!cell) continue;

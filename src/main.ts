@@ -110,9 +110,13 @@ export default class WandlogPlugin extends Plugin {
     // Auto-save cache every 30s
     this.registerInterval(window.setInterval(() => void this.persistCache(), 30_000));
 
-    // Activate view once layout is ready
+    // Activate view once layout is ready. Delay a beat so Obsidian's
+    // workspace restoration (which happens after layout-ready) finishes
+    // first — otherwise we'd create a duplicate leaf.
     this.app.workspace.onLayoutReady(() => {
-      void this.activateView();
+      window.setTimeout(() => {
+        void this.activateView();
+      }, 300);
     });
   }
 
@@ -154,6 +158,10 @@ export default class WandlogPlugin extends Plugin {
     const leaves = workspace.getLeavesOfType(VIEW_TYPE);
 
     if (leaves.length > 0) {
+      // Dedupe: close any extra Wandlog leaves, keep only the first
+      for (let i = 1; i < leaves.length; i++) {
+        leaves[i].detach();
+      }
       workspace.revealLeaf(leaves[0]);
       return;
     }

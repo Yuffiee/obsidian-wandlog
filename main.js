@@ -1122,7 +1122,9 @@ var WandlogPlugin = class extends import_obsidian6.Plugin {
     );
     this.registerInterval(window.setInterval(() => void this.persistCache(), 3e4));
     this.app.workspace.onLayoutReady(() => {
-      void this.activateView();
+      window.setTimeout(() => {
+        void this.activateView();
+      }, 300);
     });
   }
   onunload() {
@@ -1157,6 +1159,9 @@ var WandlogPlugin = class extends import_obsidian6.Plugin {
     const { workspace } = this.app;
     const leaves = workspace.getLeavesOfType(VIEW_TYPE);
     if (leaves.length > 0) {
+      for (let i = 1; i < leaves.length; i++) {
+        leaves[i].detach();
+      }
       workspace.revealLeaf(leaves[0]);
       return;
     }

@@ -27,7 +27,7 @@ __export(main_exports, {
   default: () => WandlogPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian5 = require("obsidian");
+var import_obsidian6 = require("obsidian");
 
 // src/settings.ts
 var import_obsidian2 = require("obsidian");
@@ -175,6 +175,9 @@ var WandlogSettingTab = class extends import_obsidian2.PluginSettingTab {
   }
 };
 
+// src/indexer.ts
+var import_obsidian3 = require("obsidian");
+
 // src/utils.ts
 function wordCount(text) {
   const cjkRe = /[\u4e00-\u9fff\u3400-\u4dbf\u3000-\u303f\uff00-\uffef\ufe30-\ufe4f\u{20000}-\u{2a6df}\u{2a700}-\u{2b73f}\u{2b740}-\u{2b81f}\u{2b820}-\u{2ceaf}\u{2ceb0}-\u{2ebef}\u{30000}-\u{3134f}\u{f900}-\u{faff}]/gu;
@@ -266,6 +269,9 @@ function shortPath(filePath) {
 var BATCH_SIZE = 20;
 var Indexer = class {
   constructor(app, settings) {
+    /** Cache of unchecked tasks per file — built lazily, updated incrementally on file events. */
+    this.tasksCache = null;
+    this.tasksFoldersKey = "";
     this.app = app;
     this.settings = settings;
     this.cache = {
@@ -294,9 +300,11 @@ var Indexer = class {
   }
   async indexFile(file) {
     const filePath = file.path;
-    const name = file.name;
     const isTracked = this.isInFolders(filePath, this.settings.trackFolders);
     const isCardSource = this.isInFolders(filePath, this.settings.cardFolders);
+    if (!isTracked && !isCardSource)
+      return;
+    const name = file.name;
     let content;
     try {
       content = await this.app.vault.cachedRead(file);
@@ -321,9 +329,12 @@ var Indexer = class {
     if (file.extension !== "md")
       return;
     void this.indexFile(file);
+    void this.indexTasksForFile(file);
   }
   onFileDeleted(filePath) {
     delete this.cache.leafItems[filePath];
+    if (this.tasksCache)
+      delete this.tasksCache[filePath];
     const fileName = filePath.split("/").pop() || "";
     const d = dateFromFilename(fileName);
     if (d)
@@ -333,15 +344,21 @@ var Indexer = class {
     if (file.extension !== "md")
       return;
     void this.indexFile(file);
+    void this.indexTasksForFile(file);
   }
   onFileRenamed(file, oldPath) {
     this.onFileDeleted(oldPath);
     void this.indexFile(file);
+    void this.indexTasksForFile(file);
   }
   async updateSettings(settings) {
     const oldTrack = this.settings.trackFolders;
     const oldCard = this.settings.cardFolders;
+    const oldTodo = this.settings.todoFolders;
     this.settings = settings;
+    if (!arrayEqual(oldTodo, settings.todoFolders)) {
+      this.tasksCache = null;
+    }
     if (!arrayEqual(oldTrack, settings.trackFolders) || !arrayEqual(oldCard, settings.cardFolders)) {
       await this.fullScan();
     }
@@ -358,34 +375,81 @@ var Indexer = class {
   }
   /**
    * Find unchecked tasks from the specified folders.
-   * Scans markdown files directly (does not use the cached leafItems).
+   * Uses a per-file cache that is updated incrementally on file events;
+   * a full rescan only happens when the folder set changes.
    */
   async getUncheckedTasks(folders) {
     if (folders.length === 0)
       return [];
-    const result = [];
+    const key = folders.join("\0");
+    if (this.tasksCache && this.tasksFoldersKey === key) {
+      return this.flattenTasks();
+    }
+    this.tasksCache = {};
+    this.tasksFoldersKey = key;
     const files = this.app.vault.getMarkdownFiles();
     for (const file of files) {
       if (!this.isInFolders(file.path, folders))
         continue;
-      let content;
-      try {
-        content = await this.app.vault.cachedRead(file);
-      } catch (e) {
-        console.warn("[Wandlog] Failed to read file for tasks:", (e == null ? void 0 : e.message) || e);
-        continue;
-      }
-      const lines = content.split("\n");
-      for (let i = 0; i < lines.length; i++) {
-        const taskMatch = lines[i].match(/^(\s*)[-*+]\s+\[\s\]\s+(.+)/u);
-        if (taskMatch) {
-          result.push({
-            filePath: file.path,
-            lineNumber: i,
-            text: lines[i].trim(),
-            cleanText: taskMatch[2].trim()
-          });
-        }
+      const tasks = await this.extractTasks(file);
+      if (tasks.length > 0)
+        this.tasksCache[file.path] = tasks;
+    }
+    return this.flattenTasks();
+  }
+  /** Re-scan one file's tasks after it was modified by the plugin (keep cache in sync). */
+  async rescanFileTasks(filePath) {
+    if (!this.tasksCache)
+      return;
+    const file = this.app.vault.getAbstractFileByPath(filePath);
+    if (file instanceof import_obsidian3.TFile) {
+      await this.indexTasksForFile(file);
+    } else {
+      delete this.tasksCache[filePath];
+    }
+  }
+  async indexTasksForFile(file) {
+    if (!this.tasksCache)
+      return;
+    if (!this.isInFolders(file.path, this.settings.todoFolders)) {
+      delete this.tasksCache[file.path];
+      return;
+    }
+    const tasks = await this.extractTasks(file);
+    if (tasks.length > 0) {
+      this.tasksCache[file.path] = tasks;
+    } else {
+      delete this.tasksCache[file.path];
+    }
+  }
+  flattenTasks() {
+    const result = [];
+    if (!this.tasksCache)
+      return result;
+    for (const items of Object.values(this.tasksCache)) {
+      result.push(...items);
+    }
+    return result;
+  }
+  async extractTasks(file) {
+    const result = [];
+    let content;
+    try {
+      content = await this.app.vault.cachedRead(file);
+    } catch (e) {
+      console.warn("[Wandlog] Failed to read file for tasks:", (e == null ? void 0 : e.message) || e);
+      return result;
+    }
+    const lines = content.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      const taskMatch = lines[i].match(/^(\s*)[-*+]\s+\[\s\]\s+(.+)/u);
+      if (taskMatch) {
+        result.push({
+          filePath: file.path,
+          lineNumber: i,
+          text: lines[i].trim(),
+          cleanText: taskMatch[2].trim()
+        });
       }
     }
     return result;
@@ -403,7 +467,7 @@ var Indexer = class {
 };
 
 // src/view.ts
-var import_obsidian4 = require("obsidian");
+var import_obsidian5 = require("obsidian");
 
 // src/heatmap.ts
 var Heatmap = class {
@@ -555,7 +619,7 @@ var Heatmap = class {
 };
 
 // src/card-walk.ts
-var import_obsidian3 = require("obsidian");
+var import_obsidian4 = require("obsidian");
 var CardWalk = class {
   constructor(container, onCardClick, onRefresh, app) {
     this.allItems = [];
@@ -617,10 +681,10 @@ var CardWalk = class {
     container.addEventListener("contextmenu", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      new import_obsidian3.Menu().addItem(
+      new import_obsidian4.Menu().addItem(
         (menuItem) => menuItem.setTitle(t("\u590D\u5236\u5230\u526A\u8D34\u677F", "Copy to clipboard")).setIcon("copy").onClick(async () => {
           await navigator.clipboard.writeText(card.cleanText);
-          new import_obsidian3.Notice(t("\u5DF2\u590D\u5236", "Copied"));
+          new import_obsidian4.Notice(t("\u5DF2\u590D\u5236", "Copied"));
         })
       ).addItem(
         (menuItem) => menuItem.setTitle(t("\u5220\u9664", "Delete")).setIcon("trash").setWarning(true).onClick(
@@ -639,14 +703,14 @@ var CardWalk = class {
     try {
       const file = this.app.vault.getAbstractFileByPath(item.filePath);
       if (!file) {
-        new import_obsidian3.Notice(`File not found: ${item.filePath}`);
+        new import_obsidian4.Notice(`File not found: ${item.filePath}`);
         return;
       }
       const content = await this.app.vault.read(file);
       const lines = content.split("\n");
       const lineIndex = lines.findIndex((line) => line.trim() === item.text);
       if (lineIndex === -1) {
-        new import_obsidian3.Notice(t("\u672A\u627E\u5230\u5339\u914D\u7684\u884C", "Line not found"));
+        new import_obsidian4.Notice(t("\u672A\u627E\u5230\u5339\u914D\u7684\u884C", "Line not found"));
         return;
       }
       lines.splice(lineIndex, 1);
@@ -655,15 +719,15 @@ var CardWalk = class {
       this.allItems = this.allItems.filter(
         (it) => !(it.filePath === item.filePath && it.cleanText === item.cleanText)
       );
-      new import_obsidian3.Notice(t("\u5DF2\u5220\u9664", "Deleted"));
+      new import_obsidian4.Notice(t("\u5DF2\u5220\u9664", "Deleted"));
       this.refresh();
     } catch (e) {
       console.error("[Wandlog] Delete failed:", e);
-      new import_obsidian3.Notice(t("\u5220\u9664\u5931\u8D25", "Delete failed"));
+      new import_obsidian4.Notice(t("\u5220\u9664\u5931\u8D25", "Delete failed"));
     }
   }
 };
-var ConfirmModal = class extends import_obsidian3.Modal {
+var ConfirmModal = class extends import_obsidian4.Modal {
   constructor(app, message, onConfirm) {
     super(app);
     this.message = message;
@@ -686,7 +750,7 @@ var ConfirmModal = class extends import_obsidian3.Modal {
 
 // src/view.ts
 var VIEW_TYPE = "wandlog-view";
-var WandlogView = class extends import_obsidian4.ItemView {
+var WandlogView = class extends import_obsidian5.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.heatmap = null;
@@ -726,7 +790,7 @@ var WandlogView = class extends import_obsidian4.ItemView {
     const diceBtn = cardHeader.createEl("button", {
       cls: "tm-dice-btn"
     });
-    (0, import_obsidian4.setIcon)(diceBtn, "dice");
+    (0, import_obsidian5.setIcon)(diceBtn, "dice");
     diceBtn.setAttr("aria-label", t("\u6362\u4E00\u5F20", "Next card"));
     diceBtn.addEventListener("click", () => this.refreshCards());
     const cardInner = cardSection.createDiv("tm-cards-inner");
@@ -819,10 +883,10 @@ var WandlogView = class extends import_obsidian4.ItemView {
         li.addEventListener("contextmenu", (e) => {
           e.preventDefault();
           e.stopPropagation();
-          new import_obsidian4.Menu().addItem(
+          new import_obsidian5.Menu().addItem(
             (item) => item.setTitle(t("\u590D\u5236\u5230\u526A\u8D34\u677F", "Copy to clipboard")).setIcon("copy").onClick(async () => {
               await navigator.clipboard.writeText(task.cleanText);
-              new import_obsidian4.Notice(t("\u5DF2\u590D\u5236", "Copied"));
+              new import_obsidian5.Notice(t("\u5DF2\u590D\u5236", "Copied"));
             })
           ).addItem(
             (menuItem) => menuItem.setTitle(t("\u5220\u9664", "Delete")).setIcon("trash").setWarning(true).onClick(() => this.deleteTodo(task))
@@ -843,23 +907,24 @@ var WandlogView = class extends import_obsidian4.ItemView {
     try {
       const file = this.app.vault.getAbstractFileByPath(task.filePath);
       if (!file) {
-        new import_obsidian4.Notice(`File not found: ${task.filePath}`);
+        new import_obsidian5.Notice(`File not found: ${task.filePath}`);
         return;
       }
       const content = await this.app.vault.read(file);
       const lines = content.split("\n");
       const lineIndex = lines.findIndex((line) => line.trim() === task.text);
       if (lineIndex === -1) {
-        new import_obsidian4.Notice(t("\u672A\u627E\u5230\u5339\u914D\u7684\u884C", "Line not found"));
+        new import_obsidian5.Notice(t("\u672A\u627E\u5230\u5339\u914D\u7684\u884C", "Line not found"));
         return;
       }
       lines[lineIndex] = lines[lineIndex].replace("[ ]", "[x]");
       await this.app.vault.modify(file, lines.join("\n"));
-      new import_obsidian4.Notice(t("\u5DF2\u6807\u8BB0\u5B8C\u6210 \u2705", "Marked done \u2705"));
+      await this.plugin.indexer.rescanFileTasks(task.filePath);
+      new import_obsidian5.Notice(t("\u5DF2\u6807\u8BB0\u5B8C\u6210 \u2705", "Marked done \u2705"));
       this.refreshTodos();
     } catch (e) {
       console.error("[Wandlog] Mark task complete failed:", e);
-      new import_obsidian4.Notice(t("\u64CD\u4F5C\u5931\u8D25", "Failed"));
+      new import_obsidian5.Notice(t("\u64CD\u4F5C\u5931\u8D25", "Failed"));
     }
   }
   /** Create a simple static section header (no collapse). */
@@ -872,24 +937,25 @@ var WandlogView = class extends import_obsidian4.ItemView {
     try {
       const file = this.app.vault.getAbstractFileByPath(task.filePath);
       if (!file) {
-        new import_obsidian4.Notice(`File not found: ${task.filePath}`);
+        new import_obsidian5.Notice(`File not found: ${task.filePath}`);
         return;
       }
       const content = await this.app.vault.read(file);
       const lines = content.split("\n");
       const lineIndex = lines.findIndex((line) => line.trim() === task.text);
       if (lineIndex === -1) {
-        new import_obsidian4.Notice(t("\u672A\u627E\u5230\u5339\u914D\u7684\u884C", "Line not found"));
+        new import_obsidian5.Notice(t("\u672A\u627E\u5230\u5339\u914D\u7684\u884C", "Line not found"));
         return;
       }
       lines.splice(lineIndex, 1);
       const newContent = lines.join("\n");
       await this.app.vault.modify(file, newContent);
-      new import_obsidian4.Notice(t("\u5DF2\u5220\u9664", "Deleted"));
+      await this.plugin.indexer.rescanFileTasks(task.filePath);
+      new import_obsidian5.Notice(t("\u5DF2\u5220\u9664", "Deleted"));
       this.refreshTodos();
     } catch (e) {
       console.error("[Wandlog] Delete todo failed:", e);
-      new import_obsidian4.Notice(t("\u5220\u9664\u5931\u8D25", "Delete failed"));
+      new import_obsidian5.Notice(t("\u5220\u9664\u5931\u8D25", "Delete failed"));
     }
   }
   invalidateDailyNoteCache() {
@@ -934,7 +1000,7 @@ var WandlogView = class extends import_obsidian4.ItemView {
   async openSourceFile(item) {
     const file = this.app.vault.getAbstractFileByPath(item.filePath);
     if (!file) {
-      new import_obsidian4.Notice(`File not found: ${item.filePath}`);
+      new import_obsidian5.Notice(`File not found: ${item.filePath}`);
       return;
     }
     const leaf = this.app.workspace.getLeaf(
@@ -969,11 +1035,12 @@ var WandlogView = class extends import_obsidian4.ItemView {
 };
 
 // src/main.ts
-var WandlogPlugin = class extends import_obsidian5.Plugin {
+var WandlogPlugin = class extends import_obsidian6.Plugin {
   constructor() {
     super(...arguments);
     this.view = null;
     this.refreshTimeout = null;
+    this.cacheDirty = false;
   }
   /** Lazily resolve the view instance from workspace leaves. */
   get activeView() {
@@ -1013,8 +1080,9 @@ var WandlogPlugin = class extends import_obsidian5.Plugin {
     this.addSettingTab(new WandlogSettingTab(this.app, this));
     this.registerEvent(
       this.app.vault.on("modify", (file) => {
-        if (file instanceof import_obsidian5.TFile && file.extension === "md") {
+        if (file instanceof import_obsidian6.TFile && file.extension === "md") {
           this.indexer.onFileChanged(file);
+          this.cacheDirty = true;
           this.debounceRefresh();
         }
       })
@@ -1022,8 +1090,9 @@ var WandlogPlugin = class extends import_obsidian5.Plugin {
     this.registerEvent(
       this.app.vault.on("create", (file) => {
         var _a, _b;
-        if (file instanceof import_obsidian5.TFile && file.extension === "md") {
+        if (file instanceof import_obsidian6.TFile && file.extension === "md") {
           this.indexer.onFileCreated(file);
+          this.cacheDirty = true;
           (_a = this.activeView) == null ? void 0 : _a.invalidateDatesCache();
           (_b = this.activeView) == null ? void 0 : _b.invalidateDailyNoteCache();
           this.debounceRefresh();
@@ -1033,8 +1102,9 @@ var WandlogPlugin = class extends import_obsidian5.Plugin {
     this.registerEvent(
       this.app.vault.on("delete", (file) => {
         var _a, _b;
-        if (file instanceof import_obsidian5.TFile && file.extension === "md") {
+        if (file instanceof import_obsidian6.TFile && file.extension === "md") {
           this.indexer.onFileDeleted(file.path);
+          this.cacheDirty = true;
           (_a = this.activeView) == null ? void 0 : _a.invalidateDatesCache();
           (_b = this.activeView) == null ? void 0 : _b.invalidateDailyNoteCache();
           this.debounceRefresh();
@@ -1043,8 +1113,9 @@ var WandlogPlugin = class extends import_obsidian5.Plugin {
     );
     this.registerEvent(
       this.app.vault.on("rename", (file, oldPath) => {
-        if (file instanceof import_obsidian5.TFile && file.extension === "md") {
+        if (file instanceof import_obsidian6.TFile && file.extension === "md") {
           this.indexer.onFileRenamed(file, oldPath);
+          this.cacheDirty = true;
           this.debounceRefresh();
         }
       })
@@ -1070,9 +1141,13 @@ var WandlogPlugin = class extends import_obsidian5.Plugin {
       indexerCache: this.indexer.getCache()
     });
     await this.indexer.updateSettings(this.settings);
+    this.cacheDirty = true;
     (_a = this.activeView) == null ? void 0 : _a.onSettingsChanged(!arrayEqual(oldCard, this.settings.cardFolders));
   }
   async persistCache() {
+    if (!this.cacheDirty)
+      return;
+    this.cacheDirty = false;
     await this.saveData({
       settings: this.settings,
       indexerCache: this.indexer.getCache()

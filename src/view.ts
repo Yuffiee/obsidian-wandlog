@@ -229,6 +229,9 @@ export class WandlogView extends ItemView {
       lines[lineIndex] = lines[lineIndex].replace("[ ]", "[x]");
       await this.app.vault.modify(file, lines.join("\n"));
 
+      // Sync the task cache right away so the refreshed list is accurate
+      await this.plugin.indexer.rescanFileTasks(task.filePath);
+
       new Notice(t("已标记完成 ✅", "Marked done ✅"));
       this.refreshTodos();
     } catch (e) {
@@ -263,6 +266,9 @@ export class WandlogView extends ItemView {
       lines.splice(lineIndex, 1);
       const newContent = lines.join("\n");
       await this.app.vault.modify(file, newContent);
+
+      // Sync the task cache right away so the refreshed list is accurate
+      await this.plugin.indexer.rescanFileTasks(task.filePath);
 
       new Notice(t("已删除", "Deleted"));
       this.refreshTodos();

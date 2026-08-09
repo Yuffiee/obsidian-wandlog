@@ -15,6 +15,7 @@ export default class WandlogPlugin extends Plugin {
   indexer!: Indexer;
   view: WandlogView | null = null;
   private refreshTimeout: number | null = null;
+  private cacheDirty = false;
 
   /** Lazily resolve the view instance from workspace leaves. */
   private get activeView(): WandlogView | null {
@@ -66,6 +67,7 @@ export default class WandlogPlugin extends Plugin {
       this.app.vault.on("modify", (file) => {
         if (file instanceof TFile && file.extension === "md") {
           this.indexer.onFileChanged(file);
+          this.cacheDirty = true;
           this.debounceRefresh();
         }
       }),
@@ -75,6 +77,7 @@ export default class WandlogPlugin extends Plugin {
       this.app.vault.on("create", (file) => {
         if (file instanceof TFile && file.extension === "md") {
           this.indexer.onFileCreated(file);
+          this.cacheDirty = true;
           this.activeView?.invalidateDatesCache();
           this.activeView?.invalidateDailyNoteCache();
           this.debounceRefresh();
@@ -86,6 +89,7 @@ export default class WandlogPlugin extends Plugin {
       this.app.vault.on("delete", (file) => {
         if (file instanceof TFile && file.extension === "md") {
           this.indexer.onFileDeleted(file.path);
+          this.cacheDirty = true;
           this.activeView?.invalidateDatesCache();
           this.activeView?.invalidateDailyNoteCache();
           this.debounceRefresh();
@@ -97,6 +101,7 @@ export default class WandlogPlugin extends Plugin {
       this.app.vault.on("rename", (file, oldPath) => {
         if (file instanceof TFile && file.extension === "md") {
           this.indexer.onFileRenamed(file, oldPath);
+          this.cacheDirty = true;
           this.debounceRefresh();
         }
       }),
@@ -129,10 +134,15 @@ export default class WandlogPlugin extends Plugin {
       indexerCache: this.indexer.getCache(),
     });
     await this.indexer.updateSettings(this.settings);
+    // fullScan may have rebuilt the cache after saveData — mark dirty so the
+    // next interval persists it (avoid persisting stale cache on shutdown).
+    this.cacheDirty = true;
     this.activeView?.onSettingsChanged(!arrayEqual(oldCard, this.settings.cardFolders));
   }
 
   async persistCache(): Promise<void> {
+    if (!this.cacheDirty) return;
+    this.cacheDirty = false;
     await this.saveData({
       settings: this.settings,
       indexerCache: this.indexer.getCache(),

@@ -24,6 +24,9 @@ export class Indexer {
   private app: App;
   private settings: PluginSettings;
   private cache: IndexerCache;
+  /** Cache of unchecked tasks per file — built lazily, updated incrementally on file events. */
+  private tasksCache: Record<string, TaskItem[]> | null = null;
+  private tasksFoldersKey = "";
 
   constructor(app: App, settings: PluginSettings) {
     this.app = app;
@@ -59,9 +62,12 @@ export class Indexer {
 
   private async indexFile(file: TFile): Promise<void> {
     const filePath = file.path;
-    const name = file.name;
     const isTracked = this.isInFolders(filePath, this.settings.trackFolders);
     const isCardSource = this.isInFolders(filePath, this.settings.cardFolders);
+    // Short-circuit: skip files outside both card and track folders without reading them
+    if (!isTracked && !isCardSource) return;
+
+    const name = file.name;
     let content: string;
 
     try {
@@ -91,10 +97,12 @@ export class Indexer {
   onFileChanged(file: TFile): void {
     if (file.extension !== "md") return;
     void this.indexFile(file);
+    void this.indexTasksForFile(file);
   }
 
   onFileDeleted(filePath: string): void {
     delete this.cache.leafItems[filePath];
+    if (this.tasksCache) delete this.tasksCache[filePath];
     const fileName = filePath.split("/").pop() || "";
     const d = dateFromFilename(fileName);
     if (d) delete this.cache.dailyWordCounts[d];
@@ -103,18 +111,24 @@ export class Indexer {
   onFileCreated(file: TFile): void {
     if (file.extension !== "md") return;
     void this.indexFile(file);
+    void this.indexTasksForFile(file);
   }
 
   onFileRenamed(file: TFile, oldPath: string): void {
     this.onFileDeleted(oldPath);
     void this.indexFile(file);
+    void this.indexTasksForFile(file);
   }
 
   async updateSettings(settings: PluginSettings): Promise<void> {
     const oldTrack = this.settings.trackFolders;
     const oldCard = this.settings.cardFolders;
+    const oldTodo = this.settings.todoFolders;
     this.settings = settings;
 
+    if (!arrayEqual(oldTodo, settings.todoFolders)) {
+      this.tasksCache = null;
+    }
     if (!arrayEqual(oldTrack, settings.trackFolders) || !arrayEqual(oldCard, settings.cardFolders)) {
       await this.fullScan();
     }
@@ -134,39 +148,86 @@ export class Indexer {
 
   /**
    * Find unchecked tasks from the specified folders.
-   * Scans markdown files directly (does not use the cached leafItems).
+   * Uses a per-file cache that is updated incrementally on file events;
+   * a full rescan only happens when the folder set changes.
    */
   async getUncheckedTasks(folders: string[]): Promise<TaskItem[]> {
     if (folders.length === 0) return [];
 
-    const result: TaskItem[] = [];
-    const files = this.app.vault.getMarkdownFiles();
-
-    for (const file of files) {
-      if (!this.isInFolders(file.path, folders)) continue;
-      let content: string;
-      try {
-        content = await this.app.vault.cachedRead(file);
-      } catch (e) {
-        console.warn("[Wandlog] Failed to read file for tasks:", (e as Error)?.message || e);
-        continue;
-      }
-
-      const lines = content.split("\n");
-      for (let i = 0; i < lines.length; i++) {
-        // Match: "- [ ] something", "* [ ] something", or "  - [ ] indented"
-        const taskMatch = lines[i].match(/^(\s*)[-*+]\s+\[\s\]\s+(.+)/u);
-        if (taskMatch) {
-          result.push({
-            filePath: file.path,
-            lineNumber: i,
-            text: lines[i].trim(),
-            cleanText: taskMatch[2].trim(),
-          });
-        }
-      }
+    const key = folders.join("\u0000");
+    if (this.tasksCache && this.tasksFoldersKey === key) {
+      return this.flattenTasks();
     }
 
+    // Rebuild the cache
+    this.tasksCache = {};
+    this.tasksFoldersKey = key;
+    const files = this.app.vault.getMarkdownFiles();
+    for (const file of files) {
+      if (!this.isInFolders(file.path, folders)) continue;
+      const tasks = await this.extractTasks(file);
+      if (tasks.length > 0) this.tasksCache[file.path] = tasks;
+    }
+    return this.flattenTasks();
+  }
+
+  /** Re-scan one file's tasks after it was modified by the plugin (keep cache in sync). */
+  async rescanFileTasks(filePath: string): Promise<void> {
+    if (!this.tasksCache) return;
+    const file = this.app.vault.getAbstractFileByPath(filePath);
+    if (file instanceof TFile) {
+      await this.indexTasksForFile(file);
+    } else {
+      delete this.tasksCache[filePath];
+    }
+  }
+
+  private async indexTasksForFile(file: TFile): Promise<void> {
+    if (!this.tasksCache) return;
+    if (!this.isInFolders(file.path, this.settings.todoFolders)) {
+      delete this.tasksCache[file.path];
+      return;
+    }
+    const tasks = await this.extractTasks(file);
+    if (tasks.length > 0) {
+      this.tasksCache[file.path] = tasks;
+    } else {
+      delete this.tasksCache[file.path];
+    }
+  }
+
+  private flattenTasks(): TaskItem[] {
+    const result: TaskItem[] = [];
+    if (!this.tasksCache) return result;
+    for (const items of Object.values(this.tasksCache)) {
+      result.push(...items);
+    }
+    return result;
+  }
+
+  private async extractTasks(file: TFile): Promise<TaskItem[]> {
+    const result: TaskItem[] = [];
+    let content: string;
+    try {
+      content = await this.app.vault.cachedRead(file);
+    } catch (e) {
+      console.warn("[Wandlog] Failed to read file for tasks:", (e as Error)?.message || e);
+      return result;
+    }
+
+    const lines = content.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      // Match: "- [ ] something", "* [ ] something", or "  - [ ] indented"
+      const taskMatch = lines[i].match(/^(\s*)[-*+]\s+\[\s\]\s+(.+)/u);
+      if (taskMatch) {
+        result.push({
+          filePath: file.path,
+          lineNumber: i,
+          text: lines[i].trim(),
+          cleanText: taskMatch[2].trim(),
+        });
+      }
+    }
     return result;
   }
 

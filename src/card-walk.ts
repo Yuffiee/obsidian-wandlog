@@ -65,8 +65,8 @@ export class CardWalk {
       const emptyEl = this.container.createDiv("tm-cards-empty");
       emptyEl.setText(
         t(
-          "暂无符合条件的摘录。\n请在设置中调整排除文件夹。",
-          "No matching items found.\nAdjust exclude folders in settings.",
+          "暂无符合条件的摘录。\n请在设置中指定卡片来源文件夹。",
+          "No matching items found.\nSet card folders in settings.",
         ),
       );
       const settingsBtn = emptyEl.createEl("button", { cls: "tm-settings-link" });

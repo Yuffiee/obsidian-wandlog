@@ -70,7 +70,7 @@ function t(zh, en) {
 var DEFAULT_SETTINGS = {
   trackFolders: ["Journal"],
   dailyWordTarget: 500,
-  excludeFolders: ["Work"],
+  cardFolders: [],
   todoFolders: [],
   openInNewTab: true,
   colorScheme: "green"
@@ -131,16 +131,16 @@ var WandlogSettingTab = class extends import_obsidian2.PluginSettingTab {
     new import_obsidian2.Setting(containerEl).setName(t("\u{1F3B2} \u968F\u673A\u6F2B\u6B65", "\u{1F3B2} Random")).setHeading();
     addFolderListSetting(
       containerEl,
-      t("\u6392\u9664\u6587\u4EF6\u5939", "Exclude Folders"),
+      t("\u5361\u7247\u6765\u6E90\u6587\u4EF6\u5939", "Card Folders"),
       t(
-        "\u968F\u673A\u6F2B\u6B65\u5C06\u8DF3\u8FC7\u8FD9\u4E9B\u6587\u4EF6\u5939\u7684\u5185\u5BB9",
-        "Random will skip these folders."
+        "\u968F\u673A\u6F2B\u6B65\u5361\u7247\u4ECE\u8FD9\u4E9B\u6587\u4EF6\u5939\u4E2D\u62BD\u53D6\uFF0C\u8F93\u5165\u65F6\u81EA\u52A8\u5339\u914D vault \u4E2D\u7684\u6587\u4EF6\u5939",
+        "Random walk cards are picked from these folders."
       ),
-      this.plugin.settings.excludeFolders,
-      "Work, Templates",
+      this.plugin.settings.cardFolders,
+      "Journal, Project",
       this.app,
       async (folders) => {
-        this.plugin.settings.excludeFolders = folders;
+        this.plugin.settings.cardFolders = folders;
         await this.plugin.saveSettings();
       }
     );
@@ -295,8 +295,8 @@ var Indexer = class {
   async indexFile(file) {
     const filePath = file.path;
     const name = file.name;
-    const isExcluded = this.isInFolders(filePath, this.settings.excludeFolders);
     const isTracked = this.isInFolders(filePath, this.settings.trackFolders);
+    const isCardSource = this.isInFolders(filePath, this.settings.cardFolders);
     let content;
     try {
       content = await this.app.vault.cachedRead(file);
@@ -304,10 +304,10 @@ var Indexer = class {
       console.warn(`[Wandlog] Failed to read: ${filePath}`);
       return;
     }
-    if (isExcluded) {
-      delete this.cache.leafItems[filePath];
-    } else {
+    if (isCardSource) {
       this.cache.leafItems[filePath] = extractLeafItems(content, filePath);
+    } else {
+      delete this.cache.leafItems[filePath];
     }
     if (isTracked) {
       const d = dateFromFilename(name);
@@ -338,12 +338,12 @@ var Indexer = class {
     this.onFileDeleted(oldPath);
     void this.indexFile(file);
   }
-  updateSettings(settings) {
-    const oldExclude = this.settings.excludeFolders;
+  async updateSettings(settings) {
     const oldTrack = this.settings.trackFolders;
+    const oldCard = this.settings.cardFolders;
     this.settings = settings;
-    if (!arrayEqual(oldExclude, settings.excludeFolders) || !arrayEqual(oldTrack, settings.trackFolders)) {
-      this.fullScan();
+    if (!arrayEqual(oldTrack, settings.trackFolders) || !arrayEqual(oldCard, settings.cardFolders)) {
+      await this.fullScan();
     }
   }
   getAllLeafItems() {
@@ -482,8 +482,10 @@ var Heatmap = class {
     cells.style.setProperty("grid-template-columns", `repeat(${weeks.length}, 1fr)`);
     const target = this.dailyWordTarget;
     const todayStr = dateString(today);
+    const todayGridRow = (today.getDay() + 6) % 7;
+    const startRow = (todayGridRow + 1) % 7;
     for (let r = 0; r < 7; r++) {
-      const row = r;
+      const row = (startRow + r) % 7;
       for (let col = 0; col < weeks.length; col++) {
         const cell = weeks[col][row];
         if (!cell)
@@ -592,8 +594,8 @@ var CardWalk = class {
       const emptyEl = this.container.createDiv("tm-cards-empty");
       emptyEl.setText(
         t(
-          "\u6682\u65E0\u7B26\u5408\u6761\u4EF6\u7684\u6458\u5F55\u3002\n\u8BF7\u5728\u8BBE\u7F6E\u4E2D\u8C03\u6574\u6392\u9664\u6587\u4EF6\u5939\u3002",
-          "No matching items found.\nAdjust exclude folders in settings."
+          "\u6682\u65E0\u7B26\u5408\u6761\u4EF6\u7684\u6458\u5F55\u3002\n\u8BF7\u5728\u8BBE\u7F6E\u4E2D\u6307\u5B9A\u5361\u7247\u6765\u6E90\u6587\u4EF6\u5939\u3002",
+          "No matching items found.\nSet card folders in settings."
         )
       );
       const settingsBtn = emptyEl.createEl("button", { cls: "tm-settings-link" });
@@ -766,12 +768,14 @@ var WandlogView = class extends import_obsidian4.ItemView {
     this.cardWalk.setItems(items);
     this.cardWalk.refresh();
   }
-  onSettingsChanged() {
+  onSettingsChanged(cardChanged = false) {
     if (this.heatmap) {
       this.heatmap.updateTarget(this.plugin.settings.dailyWordTarget);
       this.heatmap.updateScheme(this.plugin.settings.colorScheme);
     }
     this.refreshHeatmap();
+    if (cardChanged)
+      this.refreshCards();
     this.refreshTodos();
   }
   async refreshTodos() {
@@ -801,7 +805,10 @@ var WandlogView = class extends import_obsidian4.ItemView {
       const list = this.todoInner.createEl("ul", { cls: "tm-todo-list" });
       for (const task of tasks) {
         const li = list.createEl("li", { cls: "tm-todo-item" });
-        const cb = li.createEl("span", { cls: "tm-todo-checkbox", text: "\u2610" });
+        const cb = li.createEl("span", { cls: "tm-todo-checkbox" });
+        cb.setAttr("role", "checkbox");
+        cb.setAttr("aria-checked", "false");
+        cb.setAttr("aria-label", t("\u6807\u8BB0\u5B8C\u6210", "Mark done"));
         cb.addEventListener("click", (e) => {
           e.stopPropagation();
           this.markTaskComplete(task);
@@ -1057,12 +1064,13 @@ var WandlogPlugin = class extends import_obsidian5.Plugin {
   }
   async saveSettings() {
     var _a;
+    const oldCard = [...this.settings.cardFolders];
     await this.saveData({
       settings: this.settings,
       indexerCache: this.indexer.getCache()
     });
     await this.indexer.updateSettings(this.settings);
-    (_a = this.activeView) == null ? void 0 : _a.onSettingsChanged();
+    (_a = this.activeView) == null ? void 0 : _a.onSettingsChanged(!arrayEqual(oldCard, this.settings.cardFolders));
   }
   async persistCache() {
     await this.saveData({
@@ -1088,10 +1096,9 @@ var WandlogPlugin = class extends import_obsidian5.Plugin {
       window.clearTimeout(this.refreshTimeout);
     }
     this.refreshTimeout = window.setTimeout(() => {
-      var _a, _b, _c;
+      var _a, _b;
       void ((_a = this.activeView) == null ? void 0 : _a.refreshHeatmap());
-      void ((_b = this.activeView) == null ? void 0 : _b.refreshCards());
-      void ((_c = this.activeView) == null ? void 0 : _c.refreshTodos());
+      void ((_b = this.activeView) == null ? void 0 : _b.refreshTodos());
     }, 500);
   }
 };

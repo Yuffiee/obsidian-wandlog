@@ -2,6 +2,7 @@ import { Plugin, TFile } from "obsidian";
 import { DEFAULT_SETTINGS, PluginSettings, WandlogSettingTab } from "./settings";
 import { Indexer, IndexerCache } from "./indexer";
 import { WandlogView, VIEW_TYPE } from "./view";
+import { arrayEqual } from "./utils";
 import { t } from "./i18n";
 
 interface SavedData {
@@ -122,12 +123,13 @@ export default class WandlogPlugin extends Plugin {
   }
 
   async saveSettings(): Promise<void> {
+    const oldCard = [...this.settings.cardFolders];
     await this.saveData({
       settings: this.settings,
       indexerCache: this.indexer.getCache(),
     });
     await this.indexer.updateSettings(this.settings);
-    this.activeView?.onSettingsChanged();
+    this.activeView?.onSettingsChanged(!arrayEqual(oldCard, this.settings.cardFolders));
   }
 
   async persistCache(): Promise<void> {
@@ -159,7 +161,7 @@ export default class WandlogPlugin extends Plugin {
     }
     this.refreshTimeout = window.setTimeout(() => {
       void this.activeView?.refreshHeatmap();
-      void this.activeView?.refreshCards();
+      // Cards stay fixed until the dice button is clicked
       void this.activeView?.refreshTodos();
     }, 500);
   }

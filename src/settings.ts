@@ -6,7 +6,7 @@ import type WandlogPlugin from "./main";
 export interface PluginSettings {
   trackFolders: string[];
   dailyWordTarget: number;
-  excludeFolders: string[];
+  cardFolders: string[];
   todoFolders: string[];
   openInNewTab: boolean;
   colorScheme: string;
@@ -15,7 +15,7 @@ export interface PluginSettings {
 export const DEFAULT_SETTINGS: PluginSettings = {
   trackFolders: ["Journal"],
   dailyWordTarget: 500,
-  excludeFolders: ["Work"],
+  cardFolders: [],
   todoFolders: [],
   openInNewTab: true,
   colorScheme: "green",
@@ -129,16 +129,16 @@ export class WandlogSettingTab extends PluginSettingTab {
 
     addFolderListSetting(
       containerEl,
-      t("排除文件夹", "Exclude Folders"),
+      t("卡片来源文件夹", "Card Folders"),
       t(
-        "随机漫步将跳过这些文件夹的内容",
-        "Random will skip these folders.",
+        "随机漫步卡片从这些文件夹中抽取，输入时自动匹配 vault 中的文件夹",
+        "Random walk cards are picked from these folders.",
       ),
-      this.plugin.settings.excludeFolders,
-      "Work, Templates",
+      this.plugin.settings.cardFolders,
+      "Journal, Project",
       this.app,
       async (folders) => {
-        this.plugin.settings.excludeFolders = folders;
+        this.plugin.settings.cardFolders = folders;
         await this.plugin.saveSettings();
       },
     );

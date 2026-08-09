@@ -119,12 +119,14 @@ export class WandlogView extends ItemView {
     this.cardWalk.refresh();
   }
 
-  onSettingsChanged(): void {
+  onSettingsChanged(cardChanged = false): void {
     if (this.heatmap) {
       this.heatmap.updateTarget(this.plugin.settings.dailyWordTarget);
       this.heatmap.updateScheme(this.plugin.settings.colorScheme);
     }
     this.refreshHeatmap();
+    // Refresh cards only when their source folders changed (otherwise cards stay fixed until 🎲)
+    if (cardChanged) this.refreshCards();
     this.refreshTodos();
   }
 
@@ -159,7 +161,10 @@ export class WandlogView extends ItemView {
       const list = this.todoInner.createEl("ul", { cls: "tm-todo-list" });
       for (const task of tasks) {
         const li = list.createEl("li", { cls: "tm-todo-item" });
-        const cb = li.createEl("span", { cls: "tm-todo-checkbox", text: "☐" });
+        const cb = li.createEl("span", { cls: "tm-todo-checkbox" });
+        cb.setAttr("role", "checkbox");
+        cb.setAttr("aria-checked", "false");
+        cb.setAttr("aria-label", t("标记完成", "Mark done"));
         cb.addEventListener("click", (e) => {
           e.stopPropagation();
           this.markTaskComplete(task);

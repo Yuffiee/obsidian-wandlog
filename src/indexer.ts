@@ -60,8 +60,8 @@ export class Indexer {
   private async indexFile(file: TFile): Promise<void> {
     const filePath = file.path;
     const name = file.name;
-    const isExcluded = this.isInFolders(filePath, this.settings.excludeFolders);
     const isTracked = this.isInFolders(filePath, this.settings.trackFolders);
+    const isCardSource = this.isInFolders(filePath, this.settings.cardFolders);
     let content: string;
 
     try {
@@ -71,11 +71,11 @@ export class Indexer {
       return;
     }
 
-    // Index list items
-    if (isExcluded) {
-      delete this.cache.leafItems[filePath];
-    } else {
+    // Index list items (source for random walk cards)
+    if (isCardSource) {
       this.cache.leafItems[filePath] = extractLeafItems(content, filePath);
+    } else {
+      delete this.cache.leafItems[filePath];
     }
 
     // Index daily word count
@@ -110,13 +110,13 @@ export class Indexer {
     void this.indexFile(file);
   }
 
-  updateSettings(settings: PluginSettings): void {
-    const oldExclude = this.settings.excludeFolders;
+  async updateSettings(settings: PluginSettings): Promise<void> {
     const oldTrack = this.settings.trackFolders;
+    const oldCard = this.settings.cardFolders;
     this.settings = settings;
 
-    if (!arrayEqual(oldExclude, settings.excludeFolders) || !arrayEqual(oldTrack, settings.trackFolders)) {
-      this.fullScan();
+    if (!arrayEqual(oldTrack, settings.trackFolders) || !arrayEqual(oldCard, settings.cardFolders)) {
+      await this.fullScan();
     }
   }
 

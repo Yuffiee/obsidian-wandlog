@@ -546,10 +546,8 @@ var Heatmap = class {
     cells.style.setProperty("grid-template-columns", `repeat(${weeks.length}, 1fr)`);
     const target = this.dailyWordTarget;
     const todayStr = dateString(today);
-    const todayGridRow = (today.getDay() + 6) % 7;
-    const startRow = (todayGridRow + 1) % 7;
     for (let r = 0; r < 7; r++) {
-      const row = (startRow + r) % 7;
+      const row = r;
       for (let col = 0; col < weeks.length; col++) {
         const cell = weeks[col][row];
         if (!cell)

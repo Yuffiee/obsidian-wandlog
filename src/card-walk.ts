@@ -18,6 +18,7 @@ export class CardWalk {
   private app: App;
 
   private allItems: LeafItem[] = [];
+  private currentCardPath = "";
 
   constructor(
     container: HTMLElement,
@@ -80,9 +81,42 @@ export class CardWalk {
     }
 
     const container = this.container.createDiv("tm-card-single");
+    this.currentCardPath = card.filePath;
     const displayText = card.cleanText;
 
-    container.createSpan({ cls: "tm-card-text", text: displayText });
+    // Parse and render text with tag and link highlighting.
+    // Use a per-character scan: '#' starts a tag, '[[' starts a link.
+    const textSpan = container.createSpan({ cls: "tm-card-text" });
+    let i = 0;
+    while (i < displayText.length) {
+      const rest = displayText.slice(i);
+      const tagMatch = rest.match(/^#([^\s#]+)/);
+      const linkMatch = rest.match(/^\[\[([^\]]+)\]\]/);
+
+      if (tagMatch) {
+        textSpan.createSpan({ cls: "tm-card-tag", text: `#${tagMatch[1]}` });
+        i += tagMatch[0].length;
+      } else if (linkMatch) {
+        const linkName = linkMatch[1];
+        // Display only the link text (alias if present, else filename) — Obsidian style
+        const displayText = linkName.includes("|") ? linkName.split("|")[1] : linkName;
+        const linkSpan = textSpan.createSpan({ cls: "tm-card-link", text: displayText });
+        linkSpan.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.openLink(linkName);
+        });
+        i += linkMatch[0].length;
+      } else {
+        // Consume plain text until the next '#' or '[['
+        const nextTag = rest.indexOf("#");
+        const nextLink = rest.indexOf("[[");
+        const stops = [nextTag, nextLink].filter((n) => n !== -1);
+        const end = stops.length > 0 ? Math.min(...stops) : rest.length;
+        textSpan.createSpan({ text: rest.slice(0, end) });
+        i += end;
+      }
+    }
+
     container.createSpan({ cls: "tm-card-meta", text: shortPath(card.filePath) });
 
     container.addEventListener("click", () => {
@@ -152,6 +186,20 @@ export class CardWalk {
       console.error("[Wandlog] Delete failed:", e);
       new Notice(t("删除失败", "Delete failed"));
     }
+  }
+
+  private async openLink(linkName: string): Promise<void> {
+    // Resolve through Obsidian's own link resolver (handles aliases, subfolders, case)
+    // Use the card's own file path as the resolution context so subfolder links work
+    const sourcePath = this.currentCardPath || "";
+    const target = this.app.metadataCache.getFirstLinkpathDest(linkName, sourcePath);
+    if (!target) {
+      new Notice(`File not found: ${linkName}`);
+      return;
+    }
+
+    const leaf = this.app.workspace.getLeaf(false);
+    await leaf.openFile(target);
   }
 }
 

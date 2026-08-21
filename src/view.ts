@@ -170,7 +170,36 @@ export class WandlogView extends ItemView {
           this.markTaskComplete(task);
         });
 
-        const textSpan = li.createSpan({ cls: "tm-todo-text", text: task.cleanText });
+        // Parse and render todo text with tag and link highlighting (per-char scan)
+        const textSpan = li.createSpan({ cls: "tm-todo-text" });
+        let ti = 0;
+        while (ti < task.cleanText.length) {
+          const rest = task.cleanText.slice(ti);
+          const tagMatch = rest.match(/^#([^\s#]+)/);
+          const linkMatch = rest.match(/^\[\[([^\]]+)\]\]/);
+
+          if (tagMatch) {
+            textSpan.createSpan({ cls: "tm-todo-tag", text: `#${tagMatch[1]}` });
+            ti += tagMatch[0].length;
+          } else if (linkMatch) {
+            const linkName = linkMatch[1];
+            const displayText = linkName.includes("|") ? linkName.split("|")[1] : linkName;
+            const linkSpan = textSpan.createSpan({ cls: "tm-todo-link", text: displayText });
+            linkSpan.addEventListener("click", (e) => {
+              e.stopPropagation();
+              this.openTodoLink(linkName, task.filePath);
+            });
+            ti += linkMatch[0].length;
+          } else {
+            const nextTag = rest.indexOf("#");
+            const nextLink = rest.indexOf("[[");
+            const stops = [nextTag, nextLink].filter((n) => n !== -1);
+            const end = stops.length > 0 ? Math.min(...stops) : rest.length;
+            textSpan.createSpan({ text: rest.slice(0, end) });
+            ti += end;
+          }
+        }
+
         textSpan.addEventListener("click", () => this.openSourceFile(task));
         li.createSpan({ cls: "tm-todo-meta", text: shortPath(task.filePath) });
 
@@ -276,6 +305,19 @@ export class WandlogView extends ItemView {
       console.error("[Wandlog] Delete todo failed:", e);
       new Notice(t("删除失败", "Delete failed"));
     }
+  }
+
+  private async openTodoLink(linkName: string, sourcePath: string): Promise<void> {
+    const target = this.app.metadataCache.getFirstLinkpathDest(linkName, sourcePath);
+    if (!target) {
+      new Notice(`File not found: ${linkName}`);
+      return;
+    }
+
+    const leaf = this.app.workspace.getLeaf(
+      this.plugin.settings.openInNewTab ? "tab" : false,
+    );
+    await leaf.openFile(target);
   }
 
   /** Cached map of date→TFile for daily-note lookup. */

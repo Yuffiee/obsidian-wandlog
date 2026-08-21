@@ -71,6 +71,9 @@ export function extractLeafItems(text: string, filePath: string): LeafItem[] {
     if (next !== undefined && next.indent > cur.indent) continue;
 
     const clean = cur.text.trim();
+    // Skip completed tasks ("- [x] ...") — they don't belong in random cards
+    if (/^\[[xX]\]/.test(clean)) continue;
+
     result.push({
       filePath,
       lineNumber: cur.index,

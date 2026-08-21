@@ -224,6 +224,8 @@ function extractLeafItems(text, filePath) {
     if (next !== void 0 && next.indent > cur.indent)
       continue;
     const clean = cur.text.trim();
+    if (/^\[[xX]\]/.test(clean))
+      continue;
     result.push({
       filePath,
       lineNumber: cur.index,
@@ -621,6 +623,7 @@ var import_obsidian4 = require("obsidian");
 var CardWalk = class {
   constructor(container, onCardClick, onRefresh, app) {
     this.allItems = [];
+    this.currentCardPath = "";
     this.container = container;
     this.onCardClick = onCardClick;
     this.onRefresh = onRefresh;
@@ -670,8 +673,35 @@ var CardWalk = class {
       return;
     }
     const container = this.container.createDiv("tm-card-single");
+    this.currentCardPath = card.filePath;
     const displayText = card.cleanText;
-    container.createSpan({ cls: "tm-card-text", text: displayText });
+    const textSpan = container.createSpan({ cls: "tm-card-text" });
+    let i = 0;
+    while (i < displayText.length) {
+      const rest = displayText.slice(i);
+      const tagMatch = rest.match(/^#([^\s#]+)/);
+      const linkMatch = rest.match(/^\[\[([^\]]+)\]\]/);
+      if (tagMatch) {
+        textSpan.createSpan({ cls: "tm-card-tag", text: `#${tagMatch[1]}` });
+        i += tagMatch[0].length;
+      } else if (linkMatch) {
+        const linkName = linkMatch[1];
+        const displayText2 = linkName.includes("|") ? linkName.split("|")[1] : linkName;
+        const linkSpan = textSpan.createSpan({ cls: "tm-card-link", text: displayText2 });
+        linkSpan.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.openLink(linkName);
+        });
+        i += linkMatch[0].length;
+      } else {
+        const nextTag = rest.indexOf("#");
+        const nextLink = rest.indexOf("[[");
+        const stops = [nextTag, nextLink].filter((n) => n !== -1);
+        const end = stops.length > 0 ? Math.min(...stops) : rest.length;
+        textSpan.createSpan({ text: rest.slice(0, end) });
+        i += end;
+      }
+    }
     container.createSpan({ cls: "tm-card-meta", text: shortPath(card.filePath) });
     container.addEventListener("click", () => {
       this.onCardClick(card);
@@ -723,6 +753,16 @@ var CardWalk = class {
       console.error("[Wandlog] Delete failed:", e);
       new import_obsidian4.Notice(t("\u5220\u9664\u5931\u8D25", "Delete failed"));
     }
+  }
+  async openLink(linkName) {
+    const sourcePath = this.currentCardPath || "";
+    const target = this.app.metadataCache.getFirstLinkpathDest(linkName, sourcePath);
+    if (!target) {
+      new import_obsidian4.Notice(`File not found: ${linkName}`);
+      return;
+    }
+    const leaf = this.app.workspace.getLeaf(false);
+    await leaf.openFile(target);
   }
 };
 var ConfirmModal = class extends import_obsidian4.Modal {
@@ -875,7 +915,33 @@ var WandlogView = class extends import_obsidian5.ItemView {
           e.stopPropagation();
           this.markTaskComplete(task);
         });
-        const textSpan = li.createSpan({ cls: "tm-todo-text", text: task.cleanText });
+        const textSpan = li.createSpan({ cls: "tm-todo-text" });
+        let ti = 0;
+        while (ti < task.cleanText.length) {
+          const rest = task.cleanText.slice(ti);
+          const tagMatch = rest.match(/^#([^\s#]+)/);
+          const linkMatch = rest.match(/^\[\[([^\]]+)\]\]/);
+          if (tagMatch) {
+            textSpan.createSpan({ cls: "tm-todo-tag", text: `#${tagMatch[1]}` });
+            ti += tagMatch[0].length;
+          } else if (linkMatch) {
+            const linkName = linkMatch[1];
+            const displayText = linkName.includes("|") ? linkName.split("|")[1] : linkName;
+            const linkSpan = textSpan.createSpan({ cls: "tm-todo-link", text: displayText });
+            linkSpan.addEventListener("click", (e) => {
+              e.stopPropagation();
+              this.openTodoLink(linkName, task.filePath);
+            });
+            ti += linkMatch[0].length;
+          } else {
+            const nextTag = rest.indexOf("#");
+            const nextLink = rest.indexOf("[[");
+            const stops = [nextTag, nextLink].filter((n) => n !== -1);
+            const end = stops.length > 0 ? Math.min(...stops) : rest.length;
+            textSpan.createSpan({ text: rest.slice(0, end) });
+            ti += end;
+          }
+        }
         textSpan.addEventListener("click", () => this.openSourceFile(task));
         li.createSpan({ cls: "tm-todo-meta", text: shortPath(task.filePath) });
         li.addEventListener("contextmenu", (e) => {
@@ -955,6 +1021,17 @@ var WandlogView = class extends import_obsidian5.ItemView {
       console.error("[Wandlog] Delete todo failed:", e);
       new import_obsidian5.Notice(t("\u5220\u9664\u5931\u8D25", "Delete failed"));
     }
+  }
+  async openTodoLink(linkName, sourcePath) {
+    const target = this.app.metadataCache.getFirstLinkpathDest(linkName, sourcePath);
+    if (!target) {
+      new import_obsidian5.Notice(`File not found: ${linkName}`);
+      return;
+    }
+    const leaf = this.app.workspace.getLeaf(
+      this.plugin.settings.openInNewTab ? "tab" : false
+    );
+    await leaf.openFile(target);
   }
   invalidateDailyNoteCache() {
     this.dailyNoteCache = null;

@@ -224,9 +224,7 @@
   line-height: 1.7;
   color: var(--text-normal);
   word-break: break-word;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
+  max-height: 5.1em; /* 3 lines × line-height 1.7 */
   overflow: hidden;
   margin-bottom: 4px;
 }
@@ -293,17 +291,6 @@
 }
 .tm-section-header .tm-dice-btn:active {
   transform: scale(0.85);
-}
-
-.tm-card-text {
-  font-size: 14px;
-  line-height: 1.7;
-  color: var(--text-normal);
-  word-break: break-word;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 
 .tm-card-meta {
@@ -456,4 +443,44 @@
 .tm-todo-item:focus-visible {
   outline: 2px solid var(--text-accent);
   outline-offset: 1px;
+}
+
+/* ═══════════════════════════════════════════════
+   Random Walk — Tag and Link Styling
+   ═══════════════════════════════════════════════ */
+
+.tm-card-tag,
+.tm-todo-tag {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--tag-color);
+  background: var(--tag-background);
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin: 0 1px;
+  vertical-align: middle;
+  transition: background 0.15s, color 0.15s;
+  border: 1px solid var(--tag-background-border);
+  cursor: pointer;
+}
+
+.tm-card-tag:hover,
+.tm-todo-tag:hover {
+  color: var(--tag-color-hover);
+  background: var(--tag-background-hover);
+  border-color: var(--tag-background-border-hover);
+}
+
+.tm-card-link,
+.tm-todo-link {
+  color: var(--link-color);
+  text-decoration: var(--link-decoration);
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.tm-card-link:hover,
+.tm-todo-link:hover {
+  color: var(--link-color-hover);
+  text-decoration: var(--link-decoration-hover);
 }

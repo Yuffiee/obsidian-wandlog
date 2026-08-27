@@ -107,11 +107,14 @@ export class CardWalk {
         });
         i += linkMatch[0].length;
       } else {
-        // Consume plain text until the next '#' or '[['
+        // Consume plain text until the next '#' or '[['.
+        // Guard: if a stray '[' or '#' sits at the cursor (e.g. user typing '[['),
+        // end would be 0 and cause an infinite loop — consume at least 1 char.
         const nextTag = rest.indexOf("#");
         const nextLink = rest.indexOf("[[");
         const stops = [nextTag, nextLink].filter((n) => n !== -1);
-        const end = stops.length > 0 ? Math.min(...stops) : rest.length;
+        let end = stops.length > 0 ? Math.min(...stops) : rest.length;
+        if (end === 0) end = 1;
         textSpan.createSpan({ text: rest.slice(0, end) });
         i += end;
       }

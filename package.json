@@ -1,6 +1,6 @@
 {
   "name": "wandlog",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Stroll through notes, mark your days",
   "main": "main.js",
   "scripts": {

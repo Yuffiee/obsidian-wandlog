@@ -194,7 +194,8 @@ export class WandlogView extends ItemView {
             const nextTag = rest.indexOf("#");
             const nextLink = rest.indexOf("[[");
             const stops = [nextTag, nextLink].filter((n) => n !== -1);
-            const end = stops.length > 0 ? Math.min(...stops) : rest.length;
+            let end = stops.length > 0 ? Math.min(...stops) : rest.length;
+            if (end === 0) end = 1;
             textSpan.createSpan({ text: rest.slice(0, end) });
             ti += end;
           }

@@ -1200,11 +1200,6 @@ var WandlogPlugin = class extends import_obsidian6.Plugin {
       })
     );
     this.registerInterval(window.setInterval(() => void this.persistCache(), 3e4));
-    this.app.workspace.onLayoutReady(() => {
-      window.setTimeout(() => {
-        void this.activateView();
-      }, 300);
-    });
   }
   onunload() {
     void this.persistCache();

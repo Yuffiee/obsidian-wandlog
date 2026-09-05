@@ -109,15 +109,6 @@ export default class WandlogPlugin extends Plugin {
 
     // Auto-save cache every 30s
     this.registerInterval(window.setInterval(() => void this.persistCache(), 30_000));
-
-    // Activate view once layout is ready. Delay a beat so Obsidian's
-    // workspace restoration (which happens after layout-ready) finishes
-    // first — otherwise we'd create a duplicate leaf.
-    this.app.workspace.onLayoutReady(() => {
-      window.setTimeout(() => {
-        void this.activateView();
-      }, 300);
-    });
   }
 
   onunload(): void {
